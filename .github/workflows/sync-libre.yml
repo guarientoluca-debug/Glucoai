@@ -32,7 +32,8 @@ jobs:
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git pull --rebase origin main
           git add libre-data.json
-          git diff --staged --quiet || git commit -m "sync: aggiorna dati Libre $(date -u '+%Y-%m-%d %H:%M')"
+          git diff --staged --quiet && echo "Nessuna modifica" && exit 0
+          git commit -m "sync: aggiorna dati Libre $(date -u '+%Y-%m-%d %H:%M')"
+          git pull --rebase origin main
           git push
