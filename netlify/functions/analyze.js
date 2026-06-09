@@ -13,14 +13,12 @@ exports.handler = async function(event, context) {
 
   try {
     let body;
-    try { body = JSON.parse(event.body); } 
+    try { body = JSON.parse(event.body); }
     catch(e) { return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON non valido' }) }; }
 
     const { imageBase64, mediaType } = body;
-    
-    // Usa la chiave da Netlify environment variable (più sicura)
     const apiKey = process.env.ANTHROPIC_API_KEY;
-    
+
     if (!imageBase64) return { statusCode: 400, headers, body: JSON.stringify({ error: 'imageBase64 mancante' }) };
     if (!apiKey) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Chiave API non configurata su Netlify' }) };
 
@@ -48,7 +46,6 @@ exports.handler = async function(event, context) {
           'Content-Length': Buffer.byteLength(payload)
         }
       };
-
       let data = '';
       const req = https.request(options, (res) => {
         res.on('data', chunk => data += chunk);
@@ -60,7 +57,35 @@ exports.handler = async function(event, context) {
       req.end();
     });
 
-    return { statusCode: 200, headers, body: result };
+    // Parse risposta Anthropic
+    let anthropicResponse;
+    try {
+      anthropicResponse = JSON.parse(result);
+    } catch(e) {
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Risposta API non valida', raw: result.slice(0, 200) }) };
+    }
+
+    // Controlla errori Anthropic (es. chiave non valida, quota esaurita)
+    if (anthropicResponse.error) {
+      return { statusCode: 500, headers, body: JSON.stringify({ error: anthropicResponse.error.message || 'Errore Anthropic' }) };
+    }
+
+    const text = anthropicResponse?.content?.[0]?.text;
+    if (!text) {
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Risposta vuota da Claude' }) };
+    }
+
+    // Rimuovi eventuali backtick markdown
+    const clean = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+
+    // Verifica che sia JSON valido prima di restituire
+    try {
+      JSON.parse(clean);
+    } catch(e) {
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Claude non ha restituito JSON valido', raw: clean.slice(0, 200) }) };
+    }
+
+    return { statusCode: 200, headers, body: clean };
 
   } catch (err) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };
