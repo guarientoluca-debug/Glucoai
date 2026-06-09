@@ -1,5 +1,4 @@
 const https = require('https');
-const zlib = require('zlib');
 const fs = require('fs');
 
 const EMAIL = process.env.LIBRE_EMAIL;
@@ -16,6 +15,7 @@ function request(hostname, path, method, extraHeaders, body) {
   return new Promise((resolve, reject) => {
     const payload = body ? JSON.stringify(body) : null;
     const headers = {
+      'User-Agent': 'LibreLinkUp/4.7.0 CFNetwork/1492.0.1 Darwin/23.3.0',
       'Content-Type': 'application/json',
       'version': '4.7.0',
       'product': 'llu.ios',
@@ -23,14 +23,13 @@ function request(hostname, path, method, extraHeaders, body) {
       ...extraHeaders,
       ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
     };
-    // No Accept-Encoding = no compression
-    
+
     const req = https.request({ hostname, path, method, headers }, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
         try { resolve({ status: res.statusCode, data: JSON.parse(data) }); }
-        catch(e) { resolve({ status: res.statusCode, raw: data }); }
+        catch(e) { resolve({ status: res.statusCode, raw: data.substring(0,300) }); }
       });
     });
     req.on('error', reject);
@@ -48,7 +47,7 @@ async function login() {
   console.log('🔐 Login su', host());
   let res = await request(host(), '/llu/auth/login', 'POST', {}, { email: EMAIL, password: PASSWORD });
   console.log('Status:', res.status);
-  
+
   if (res.data?.data?.redirect && res.data?.data?.region) {
     REGION = res.data.data.region;
     console.log('🌍 Redirect a regione:', REGION);
@@ -58,8 +57,8 @@ async function login() {
 
   const token = res.data?.data?.authTicket?.token;
   if (token) { console.log('✅ Login OK'); return token; }
-  
-  console.log('Risposta completa:', JSON.stringify(res.data || res.raw || '').substring(0, 300));
+
+  console.log('Risposta:', JSON.stringify(res.data || res.raw || '').substring(0, 500));
   throw new Error('Token non trovato nella risposta');
 }
 
