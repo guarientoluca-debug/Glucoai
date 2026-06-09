@@ -499,7 +499,7 @@ async function analyzePhoto(event) {
     const resp = await fetch('/.netlify/functions/analyze', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({imageBase64: base64, mediaType: 'image/jpeg', apiKey: apiKey})
+      body: JSON.stringify({imageBase64: base64, mediaType: 'image/jpeg'})
     });
 
     const data = await resp.json();

@@ -8,25 +8,21 @@ exports.handler = async function(event, context) {
     'Content-Type': 'application/json'
   };
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers, body: '' };
-  }
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
-  }
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers, body: '' };
+  if (event.httpMethod !== 'POST') return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method Not Allowed' }) };
 
   try {
     let body;
-    try {
-      body = JSON.parse(event.body);
-    } catch(e) {
-      return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON non valido: ' + e.message }) };
-    }
+    try { body = JSON.parse(event.body); } 
+    catch(e) { return { statusCode: 400, headers, body: JSON.stringify({ error: 'JSON non valido' }) }; }
 
-    const { imageBase64, mediaType, apiKey } = body;
-
+    const { imageBase64, mediaType } = body;
+    
+    // Usa la chiave da Netlify environment variable (più sicura)
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    
     if (!imageBase64) return { statusCode: 400, headers, body: JSON.stringify({ error: 'imageBase64 mancante' }) };
-    if (!apiKey)      return { statusCode: 400, headers, body: JSON.stringify({ error: 'apiKey mancante' }) };
+    if (!apiKey) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Chiave API non configurata su Netlify' }) };
 
     const payload = JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
@@ -35,7 +31,7 @@ exports.handler = async function(event, context) {
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
-          { type: 'text', text: 'Sei un nutrizionista. Analizza questo piatto e stima i carboidrati. Rispondi SOLO con JSON valido senza markdown, formato: {"alimenti":[{"nome":"nome","quantita_g":100,"carbo_g":30}],"totale_carbo_g":30,"note":""}' }
+          { type: 'text', text: 'Sei un nutrizionista esperto. Analizza questo piatto. Per ogni alimento riconosci la porzione visibile e i carboidrati per 100g. Rispondi SOLO con JSON valido senza markdown, formato: {"alimenti":[{"nome":"nome alimento","quantita_g":150,"carbo_per_100g":30,"carbo_g":45}],"totale_carbo_g":45,"note":"nota opzionale"}' }
         ]
       }]
     });
