@@ -15,9 +15,9 @@ function request(hostname, path, method, extraHeaders, body) {
   return new Promise((resolve, reject) => {
     const payload = body ? JSON.stringify(body) : null;
     const headers = {
-      'User-Agent': 'LibreLinkUp/4.7.0 CFNetwork/1492.0.1 Darwin/23.3.0',
+      'User-Agent': 'LibreLinkUp/4.16.0 CFNetwork/1492.0.1 Darwin/23.3.0',
       'Content-Type': 'application/json',
-      'version': '4.7.0',
+      'version': '4.16.0',
       'product': 'llu.ios',
       'Accept': 'application/json',
       ...extraHeaders,
