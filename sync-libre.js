@@ -12,36 +12,25 @@ if (!EMAIL || !PASSWORD) {
 
 let REGION = '';
 
-function request(hostname, path, method, headers, body) {
+function request(hostname, path, method, extraHeaders, body) {
   return new Promise((resolve, reject) => {
     const payload = body ? JSON.stringify(body) : null;
-    const opts = {
-      hostname, path, method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept-Encoding': 'gzip, deflate',
-        'version': '4.7.0',
-        'product': 'llu.ios',
-        'Accept': 'application/json',
-        ...headers,
-        ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
-      }
+    const headers = {
+      'Content-Type': 'application/json',
+      'version': '4.7.0',
+      'product': 'llu.ios',
+      'Accept': 'application/json',
+      ...extraHeaders,
+      ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
     };
-
-    const req = https.request(opts, (res) => {
-      const chunks = [];
-      res.on('data', chunk => chunks.push(chunk));
+    // No Accept-Encoding = no compression
+    
+    const req = https.request({ hostname, path, method, headers }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
       res.on('end', () => {
-        const buffer = Buffer.concat(chunks);
-        const encoding = res.headers['content-encoding'];
-        const decompress = encoding === 'gzip' ? zlib.gunzipSync :
-                          encoding === 'deflate' ? zlib.inflateSync : null;
-        try {
-          const text = decompress ? decompress(buffer).toString() : buffer.toString();
-          resolve({ status: res.statusCode, data: JSON.parse(text) });
-        } catch(e) {
-          resolve({ status: res.statusCode, data: buffer.toString() });
-        }
+        try { resolve({ status: res.statusCode, data: JSON.parse(data) }); }
+        catch(e) { resolve({ status: res.statusCode, raw: data }); }
       });
     });
     req.on('error', reject);
@@ -51,36 +40,36 @@ function request(hostname, path, method, headers, body) {
   });
 }
 
-function getHostname() {
+function host() {
   return REGION ? `api-${REGION}.libreview.io` : 'api.libreview.io';
 }
 
 async function login() {
-  console.log('🔐 Login LibreLinkUp...');
-  let res = await request('api.libreview.io', '/llu/auth/login', 'POST', {}, { email: EMAIL, password: PASSWORD });
+  console.log('🔐 Login su', host());
+  let res = await request(host(), '/llu/auth/login', 'POST', {}, { email: EMAIL, password: PASSWORD });
+  console.log('Status:', res.status);
   
-  // Handle redirect
   if (res.data?.data?.redirect && res.data?.data?.region) {
     REGION = res.data.data.region;
-    console.log(`🌍 Redirect a regione: ${REGION}`);
-    res = await request(getHostname(), '/llu/auth/login', 'POST', {}, { email: EMAIL, password: PASSWORD });
+    console.log('🌍 Redirect a regione:', REGION);
+    res = await request(host(), '/llu/auth/login', 'POST', {}, { email: EMAIL, password: PASSWORD });
+    console.log('Status dopo redirect:', res.status);
   }
 
   const token = res.data?.data?.authTicket?.token;
-  if (token) {
-    console.log('✅ Login OK');
-    return token;
-  }
-  throw new Error('Login fallito: ' + JSON.stringify(res.data).substring(0, 200));
+  if (token) { console.log('✅ Login OK'); return token; }
+  
+  console.log('Risposta completa:', JSON.stringify(res.data || res.raw || '').substring(0, 300));
+  throw new Error('Token non trovato nella risposta');
 }
 
 async function getConnections(token) {
-  const res = await request(getHostname(), '/llu/connections', 'GET', { 'Authorization': `Bearer ${token}` });
+  const res = await request(host(), '/llu/connections', 'GET', { 'Authorization': `Bearer ${token}` });
   return res.data?.data || [];
 }
 
 async function getGraph(token, patientId) {
-  const res = await request(getHostname(), `/llu/connections/${patientId}/graph`, 'GET', { 'Authorization': `Bearer ${token}` });
+  const res = await request(host(), `/llu/connections/${patientId}/graph`, 'GET', { 'Authorization': `Bearer ${token}` });
   return res.data?.data?.graphData || [];
 }
 
@@ -88,20 +77,15 @@ async function main() {
   try {
     const token = await login();
     const connections = await getConnections(token);
-    console.log(`👥 Connessioni trovate: ${connections.length}`);
+    console.log(`👥 Connessioni: ${connections.length}`);
 
     let graphData = [];
     if (connections.length > 0) {
-      const patient = connections[0];
-      console.log(`👤 Paziente: ${patient.firstName || patient.patientId}`);
-      graphData = await getGraph(token, patient.patientId);
-    } else {
-      console.log('ℹ️ Nessuna connessione — prova con dati propri non supportati da questa API');
+      console.log(`👤 Paziente: ${connections[0].firstName || connections[0].patientId}`);
+      graphData = await getGraph(token, connections[0].patientId);
     }
-
     console.log(`📊 Letture ricevute: ${graphData.length}`);
 
-    // Leggi esistenti
     let existing = [];
     if (fs.existsSync('libre-data.json')) {
       try { existing = JSON.parse(fs.readFileSync('libre-data.json', 'utf8')); } catch(e) {}
