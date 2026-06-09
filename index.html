@@ -57,11 +57,9 @@
   .empty-icon{font-size:40px;margin-bottom:9px}
   .info-box{background:#e0f2fe;border-radius:11px;padding:10px 13px;margin-bottom:12px;font-size:12px;color:#0369a1}
   .hba1c-box{background:#f5f3ff;border:2px solid rgba(139,92,246,.15);border-radius:13px;padding:13px 15px;margin-bottom:11px}
-  /* Sensor comparison */
   .sensor-diff-pos{color:#ef4444;font-weight:800}
   .sensor-diff-neg{color:#22c55e;font-weight:800}
   .sensor-diff-ok{color:#94a3b8;font-weight:700}
-  /* Carboidrati */
   .carb-photo-btn{width:100%;padding:18px;border:2px dashed #e2e8f0;border-radius:14px;background:#f8fafc;font-family:'DM Sans',sans-serif;font-size:14px;color:#64748b;cursor:pointer;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px}
   .carb-photo-btn:active{background:#f0f4f8}
   .carb-result{background:#f0fdf4;border:2px solid #bbf7d0;border-radius:13px;padding:13px;margin-bottom:10px}
@@ -134,7 +132,7 @@
     </div>
   </div>
 
-  <!-- SENSORE (comparazione manuale - nascosta ma mantenuta per dati esistenti) -->
+  <!-- SENSORE (nascosta ma mantenuta per dati esistenti) -->
   <div id="sec-sensore" style="display:none">
     <div id="s-content"></div>
   </div>
@@ -164,14 +162,12 @@
     <div class="info-box">🍽️ Stima i carboidrati del pasto con una <strong>foto</strong> oppure inserisci gli alimenti manualmente. I carbo vengono collegati alla glicemia post-pasto.</div>
     <div class="card">
       <div class="card-title">Nuovo pasto</div>
-      <!-- Foto -->
       <button class="carb-photo-btn" onclick="document.getElementById('carb-photo-input').click()">
         <span style="font-size:22px">📷</span>
         <span>Scatta/scegli foto del piatto</span>
       </button>
       <input type="file" id="carb-photo-input" accept="image/*" capture="environment" onchange="analyzePhoto(event)"/>
       <div id="carb-ai-result"></div>
-      <!-- Alimenti manuali -->
       <div style="font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Oppure aggiungi manualmente</div>
       <div class="row" style="margin-bottom:8px">
         <input type="text" id="carb-food-name" placeholder="Alimento (es. pasta)" style="flex:1"/>
@@ -179,7 +175,6 @@
         <button class="btn" style="background:#f59e0b;color:#fff;padding:10px 12px" onclick="addFoodItem()">+</button>
       </div>
       <div id="carb-food-tags" style="margin-bottom:10px;min-height:10px"></div>
-      <!-- Carbo totali -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div>
           <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:4px">🌾 CARBO TOTALI (g)</div>
@@ -253,7 +248,7 @@ let libreData = JSON.parse(localStorage.getItem('dt-libre')     || '[]');
 let currentSection = 'glicemia';
 let insulinType = 'rapida';
 let availDays = [], dayIdx = 0;
-let pendingFoods = []; // alimenti manuali in attesa
+let pendingFoods = [];
 
 const ANTHROPIC_API = '/.netlify/functions/analyze';
 let apiKey = localStorage.getItem('dt-apikey') || '';
@@ -382,7 +377,6 @@ function addFoodItem() {
   document.getElementById('carb-food-name').value='';
   document.getElementById('carb-food-g').value='';
   renderFoodTags();
-  // Auto-calcola carbo stimati dagli alimenti
   estimateCarbsFromFoods();
 }
 function removeFoodItem(i) { pendingFoods.splice(i,1); renderFoodTags(); estimateCarbsFromFoods(); }
@@ -393,7 +387,6 @@ function renderFoodTags() {
 }
 function estimateCarbsFromFoods() {
   if (!pendingFoods.length) return;
-  // Stima base carboidrati per 100g degli alimenti più comuni
   const carbPer100 = {
     'pasta':75,'riso':79,'pane':50,'pizza':30,'patate':17,'mais':74,
     'fagioli':60,'ceci':61,'lenticchie':60,'frutta':12,'mela':14,
@@ -498,20 +491,17 @@ async function analyzePhoto(event) {
       body: JSON.stringify({imageBase64: base64, mediaType: 'image/jpeg'})
     });
 
-    const data = await resp.json();
-    const text = data.content?.map(c=>c.text||'').join('') || '';
-    const clean = text.replace(/```json|```/g,'').trim();
-    const parsed = JSON.parse(clean);
+    // La function restituisce direttamente il JSON di Claude (già estratto da content[0].text)
+    const parsed = await resp.json();
 
-    // Popola i campi
+    if (!parsed.alimenti) throw new Error(parsed.error || 'Risposta non valida');
+
     pendingFoods = parsed.alimenti.map(a=>({name:a.nome, grams:a.quantita_g, carbsFromAI:a.carbo_g}));
     document.getElementById('carb-total').value = parsed.totale_carbo_g;
     renderFoodTags();
 
-    // Store AI results globally for recalculation
     window._aiAlimenti = parsed.alimenti.map(a => ({...a}));
     renderAiResult(parsed.note || '');
-    resultEl = null; // prevent double render
   } catch(err) {
     resultEl.innerHTML = `<div class="ai-error">❌ Errore nell'analisi: ${err.message}. Inserisci i carbo manualmente.</div>`;
   }
@@ -670,8 +660,6 @@ function renderSensor() {
   const absDiff=Math.round(diffs.map(d=>Math.abs(d)).reduce((a,b)=>a+b,0)/diffs.length);
   const mard=Math.round(sensors.map(s=>Math.abs(s.libre-s.glucometro)/s.glucometro*100).reduce((a,b)=>a+b,0)/sensors.length);
   const withinX=pct=>Math.round(sensors.filter(s=>Math.abs(s.libre-s.glucometro)/s.glucometro*100<=pct).length/sensors.length*100);
-
-  // SVG scatter chart: asse x = glucometro, asse y = libre
   const W=280,H=120,pad=20;
   const allVals=[...sensors.map(s=>s.glucometro),...sensors.map(s=>s.libre)];
   const mn=Math.min(...allVals,60),mx=Math.max(...allVals,220),range=mx-mn||1;
@@ -679,7 +667,6 @@ function renderSensor() {
   const toY=v=>H-pad-(v-mn)/range*(H-pad*2);
   const points=sensors.map(s=>`<circle cx="${toX(s.glucometro)}" cy="${toY(s.libre)}" r="4" fill="${Math.abs(s.libre-s.glucometro)<=15?'#22c55e':Math.abs(s.libre-s.glucometro)<=30?'#f59e0b':'#ef4444'}" opacity="0.85"/>`).join('');
   const lineStart=Math.min(...allVals,60),lineEnd=Math.max(...allVals,220);
-
   el.innerHTML=`
   <div class="card">
     <div class="card-title">Accuratezza Freestyle Libre vs Glucometro</div>
@@ -690,7 +677,6 @@ function renderSensor() {
       <div class="stat-box"><div class="stat-label">Entro ±15%</div><div class="stat-val" style="color:${withinX(15)>=80?'#22c55e':'#f59e0b'}">${withinX(15)}%</div></div>
     </div>
     <div style="font-size:10px;color:#94a3b8;margin-bottom:10px">MARD &lt;10% = ottimo · 10-20% = buono · &gt;20% = da verificare</div>
-    <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">Glucometro vs Libre (scatter)</div>
     <svg width="100%" viewBox="0 0 ${W} ${H}" style="overflow:visible">
       <line x1="${toX(lineStart)}" y1="${toY(lineStart)}" x2="${toX(lineEnd)}" y2="${toY(lineEnd)}" stroke="#e2e8f0" stroke-width="1.5" stroke-dasharray="4"/>
       ${points}
@@ -734,7 +720,6 @@ function renderCarb() {
   if(!meals.length){el.innerHTML='';empty.style.display='';return;}
   empty.style.display='none';
   const avgCarb=Math.round(meals.reduce((a,b)=>a+b.carbs,0)/meals.length);
-  // Correlazione carbo → glicemia post-pasto
   const withGlucose=meals.map(m=>{
     const mealTime=new Date(m.date).getTime();
     const postGlucose=readings.filter(r=>r.timing==='post-pasto'&&
@@ -990,7 +975,6 @@ const LIBRE_GITHUB_URL = 'https://raw.githubusercontent.com/guarientoluca-debug/
 let libreLastFetch = 0;
 
 async function fetchLibreFromGitHub() {
-  // Non rifetchare se è passato meno di 5 minuti
   const now = Date.now();
   if (now - libreLastFetch < 5 * 60 * 1000) return;
   libreLastFetch = now;
@@ -1007,7 +991,6 @@ async function fetchLibreFromGitHub() {
       return;
     }
 
-    // Merge incrementale
     const existingIds = new Set(libreData.map(r => r.id));
     const added = data.filter(r => !existingIds.has(r.id));
     if (added.length > 0) {
@@ -1039,7 +1022,6 @@ function renderLibre() {
   const iper=vals.filter(v=>v>180).length;
   const tirColor=tir>=70?'#22c55e':tir>=50?'#f59e0b':'#ef4444';
 
-  // Chart last 48h
   const now=new Date(), h48ago=new Date(now-48*3600000);
   const recent=libreData.filter(r=>new Date(r.date)>=h48ago).slice(-96);
   const W=300,H=85,pad=13;
@@ -1064,7 +1046,6 @@ function renderLibre() {
     </div>`;
   }
 
-  // Distribution zones
   const zones=[
     {label:'Ipo < 70',count:ipo,color:'#ef4444'},
     {label:'Normale 70–99',count:vals.filter(v=>v>=70&&v<=99).length,color:'#22c55e'},
@@ -1073,7 +1054,6 @@ function renderLibre() {
     {label:'Iper > 180',count:iper,color:'#dc2626'},
   ].filter(z=>z.count>0);
 
-  // Per-hour average
   const byHour=Array(24).fill(null).map((_,h)=>{
     const hv=libreData.filter(r=>new Date(r.date).getHours()===h).map(r=>r.value);
     return hv.length?Math.round(hv.reduce((a,b)=>a+b,0)/hv.length):null;
@@ -1140,7 +1120,7 @@ function importLibreCSV(event) {
     try {
       const lines = e.target.result.split('\n');
       const newReadings = [];
-      const INTERVAL_MS = 150 * 60 * 1000; // 150 min campionamento
+      const INTERVAL_MS = 150 * 60 * 1000;
       let lastTime = null;
 
       for (let i = 2; i < lines.length; i++) {
@@ -1154,7 +1134,6 @@ function importLibreCSV(event) {
           else if (type === '1' && parts[5] && parts[5].trim()) val = parseInt(parts[5].trim());
           if (!val || val < 30 || val > 500) continue;
 
-          // Parse date dd-mm-yyyy HH:MM or MM/dd/yyyy HH:MM
           let dt;
           if (ts.includes('-')) {
             const [datePart, timePart] = ts.split(' ');
@@ -1165,7 +1144,6 @@ function importLibreCSV(event) {
           }
           if (isNaN(dt.getTime())) continue;
 
-          // Campiona ogni 150 min
           if (lastTime && dt.getTime() - lastTime < INTERVAL_MS) continue;
 
           newReadings.push({ id: dt.getTime(), value: val, date: dt.toISOString() });
@@ -1179,7 +1157,6 @@ function importLibreCSV(event) {
         return;
       }
 
-      // Merge incrementale - aggiungi solo nuovi (per id)
       const existingIds = new Set(libreData.map(r => r.id));
       const added = newReadings.filter(r => !existingIds.has(r.id));
       libreData = [...libreData, ...added].sort((a,b) => new Date(a.date)-new Date(b.date));
