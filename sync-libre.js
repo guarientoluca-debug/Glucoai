@@ -89,7 +89,9 @@ async function login() {
   // Estrai token e accountId dal login finale (quello sulla regione corretta)
   const token = res.data?.data?.authTicket?.token;
   accountId = res.data?.data?.user?.id || '';
-  console.log('AccountId:', accountId ? `✅ trovato (${accountId.substring(0,8)}...)` : '❌ non trovato');
+  console.log('AccountId raw:', accountId);
+  console.log('User object:', JSON.stringify(res.data?.data?.user || {}).substring(0, 300));
+  console.log('AuthTicket:', JSON.stringify(res.data?.data?.authTicket || {}).substring(0, 300));
 
   if (token) { console.log('✅ Login OK'); return token; }
 
