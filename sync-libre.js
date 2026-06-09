@@ -1,5 +1,5 @@
-// sync-libre.js - Scarica dati Freestyle Libre e aggiorna libre-data.json
 const https = require('https');
+const zlib = require('zlib');
 const fs = require('fs');
 
 const EMAIL = process.env.LIBRE_EMAIL;
@@ -10,94 +10,77 @@ if (!EMAIL || !PASSWORD) {
   process.exit(1);
 }
 
-function request(options, body) {
+let REGION = '';
+
+function request(hostname, path, method, headers, body) {
   return new Promise((resolve, reject) => {
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', chunk => data += chunk);
+    const payload = body ? JSON.stringify(body) : null;
+    const opts = {
+      hostname, path, method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept-Encoding': 'gzip, deflate',
+        'version': '4.7.0',
+        'product': 'llu.ios',
+        'Accept': 'application/json',
+        ...headers,
+        ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {})
+      }
+    };
+
+    const req = https.request(opts, (res) => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
       res.on('end', () => {
-        try { resolve({ status: res.statusCode, data: JSON.parse(data) }); }
-        catch(e) { resolve({ status: res.statusCode, data }); }
+        const buffer = Buffer.concat(chunks);
+        const encoding = res.headers['content-encoding'];
+        const decompress = encoding === 'gzip' ? zlib.gunzipSync :
+                          encoding === 'deflate' ? zlib.inflateSync : null;
+        try {
+          const text = decompress ? decompress(buffer).toString() : buffer.toString();
+          resolve({ status: res.statusCode, data: JSON.parse(text) });
+        } catch(e) {
+          resolve({ status: res.statusCode, data: buffer.toString() });
+        }
       });
     });
     req.on('error', reject);
     req.setTimeout(30000, () => { req.destroy(); reject(new Error('Timeout')); });
-    if (body) req.write(JSON.stringify(body));
+    if (payload) req.write(payload);
     req.end();
   });
 }
 
+function getHostname() {
+  return REGION ? `api-${REGION}.libreview.io` : 'api.libreview.io';
+}
+
 async function login() {
   console.log('🔐 Login LibreLinkUp...');
-  const res = await request({
-    hostname: 'api.libreview.io',
-    path: '/llu/auth/login',
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'version': '4.7',
-      'product': 'llu.ios',
-      'Accept-Encoding': 'gzip, deflate, br',
-      'Connection': 'keep-alive',
-    }
-  }, { email: EMAIL, password: PASSWORD });
-
-  if (res.data?.data?.authTicket?.token) {
-    console.log('✅ Login OK');
-    return res.data.data.authTicket.token;
-  }
-  // Redirect region
+  let res = await request('api.libreview.io', '/llu/auth/login', 'POST', {}, { email: EMAIL, password: PASSWORD });
+  
+  // Handle redirect
   if (res.data?.data?.redirect && res.data?.data?.region) {
-    const region = res.data.data.region;
-    console.log(`🌍 Redirect a regione: ${region}`);
-    const res2 = await request({
-      hostname: `api-${region}.libreview.io`,
-      path: '/llu/auth/login',
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'version': '4.7',
-        'product': 'llu.ios',
-      }
-    }, { email: EMAIL, password: PASSWORD });
-    if (res2.data?.data?.authTicket?.token) {
-      console.log('✅ Login OK (regione)');
-      process.env.LIBRE_REGION = region;
-      return res2.data.data.authTicket.token;
-    }
+    REGION = res.data.data.region;
+    console.log(`🌍 Redirect a regione: ${REGION}`);
+    res = await request(getHostname(), '/llu/auth/login', 'POST', {}, { email: EMAIL, password: PASSWORD });
   }
-  throw new Error('Login fallito: ' + JSON.stringify(res.data));
+
+  const token = res.data?.data?.authTicket?.token;
+  if (token) {
+    console.log('✅ Login OK');
+    return token;
+  }
+  throw new Error('Login fallito: ' + JSON.stringify(res.data).substring(0, 200));
 }
 
 async function getConnections(token) {
-  const region = process.env.LIBRE_REGION || '';
-  const hostname = region ? `api-${region}.libreview.io` : 'api.libreview.io';
-  const res = await request({
-    hostname,
-    path: '/llu/connections',
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'version': '4.7',
-      'product': 'llu.ios',
-    }
-  });
+  const res = await request(getHostname(), '/llu/connections', 'GET', { 'Authorization': `Bearer ${token}` });
   return res.data?.data || [];
 }
 
-async function getGlucose(token, patientId) {
-  const region = process.env.LIBRE_REGION || '';
-  const hostname = region ? `api-${region}.libreview.io` : 'api.libreview.io';
-  const res = await request({
-    hostname,
-    path: `/llu/connections/${patientId}/graph`,
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'version': '4.7',
-      'product': 'llu.ios',
-    }
-  });
+async function getGraph(token, patientId) {
+  const res = await request(getHostname(), `/llu/connections/${patientId}/graph`, 'GET', { 'Authorization': `Bearer ${token}` });
   return res.data?.data?.graphData || [];
 }
 
@@ -105,36 +88,35 @@ async function main() {
   try {
     const token = await login();
     const connections = await getConnections(token);
+    console.log(`👥 Connessioni trovate: ${connections.length}`);
 
-    let patientId;
+    let graphData = [];
     if (connections.length > 0) {
-      patientId = connections[0].patientId;
-      console.log(`👤 Paziente: ${connections[0].firstName || 'N/A'}`);
+      const patient = connections[0];
+      console.log(`👤 Paziente: ${patient.firstName || patient.patientId}`);
+      graphData = await getGraph(token, patient.patientId);
     } else {
-      // Prova dati propri
-      console.log('ℹ️ Nessuna connessione trovata, uso dati propri');
-      patientId = 'self';
+      console.log('ℹ️ Nessuna connessione — prova con dati propri non supportati da questa API');
     }
 
-    const graphData = patientId !== 'self' 
-      ? await getGlucose(token, patientId)
-      : [];
+    console.log(`📊 Letture ricevute: ${graphData.length}`);
 
-    // Leggi dati esistenti
+    // Leggi esistenti
     let existing = [];
     if (fs.existsSync('libre-data.json')) {
       try { existing = JSON.parse(fs.readFileSync('libre-data.json', 'utf8')); } catch(e) {}
     }
 
-    // Converti nuove letture
     const INTERVAL_MS = 150 * 60 * 1000;
     let lastTime = existing.length > 0 ? new Date(existing[existing.length-1].date).getTime() : 0;
-    
     const newReadings = [];
+
     for (const g of graphData) {
-      const dt = new Date(g.Timestamp || g.timestamp || g.FactoryTimestamp);
+      const ts = g.Timestamp || g.timestamp || g.FactoryTimestamp;
+      if (!ts) continue;
+      const dt = new Date(ts);
       if (isNaN(dt.getTime())) continue;
-      const val = g.Value || g.value;
+      const val = parseInt(g.Value || g.value);
       if (!val || val < 30 || val > 500) continue;
       if (dt.getTime() - lastTime < INTERVAL_MS) continue;
       newReadings.push({ id: dt.getTime(), value: val, date: dt.toISOString() });
@@ -147,10 +129,6 @@ async function main() {
 
     fs.writeFileSync('libre-data.json', JSON.stringify(merged, null, 2));
     console.log(`✅ Aggiunte ${newReadings.length} nuove letture (tot. ${merged.length})`);
-    
-    // Scrivi output per GitHub Actions
-    fs.writeFileSync(process.env.GITHUB_OUTPUT || '/dev/null', 
-      `new_readings=${newReadings.length}\ntotal=${merged.length}\n`);
 
   } catch(err) {
     console.error('❌ Errore:', err.message);
