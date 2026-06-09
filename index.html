@@ -294,7 +294,7 @@ const fmtDay  = d => new Date(d+'T12:00:00').toLocaleDateString('it-IT',{weekday
 const fmtShort= d => new Date(d+'T12:00:00').toLocaleDateString('it-IT',{day:'2-digit',month:'short'});
 
 // ── Section switcher ──────────────────────────────────────────────────────────
-const SECS  = ['glicemia','libre','insulina','carboidrati','correlazione','giornaliero','sensore'];
+const SECS  = ['glicemia','libre','insulina','carboidrati','correlazione','giornaliero'];
 const SCOLS = {glicemia:'#3b82f6',libre:'#8b5cf6',insulina:'#6366f1',carboidrati:'#f59e0b',correlazione:'#0ea5e9',giornaliero:'#059669',sensore:'#8b5cf6'};
 function showSection(s) {
   currentSection = s;
