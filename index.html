@@ -80,12 +80,12 @@
   <div class="sub" id="sub-counts">0 glicemie · 0 dosi insulina</div>
 
   <div class="sec-bar">
-    <button class="sec-btn" onclick="showSection('glicemia')"     id="sbtn-glicemia">🩸 Glicemia</button>
-    <button class="sec-btn" onclick="showSection('insulina')"    id="sbtn-insulina">💉 Insulina</button>
-    <button class="sec-btn" onclick="showSection('sensore')"     id="sbtn-sensore">📡 Sensore</button>
-    <button class="sec-btn" onclick="showSection('carboidrati')" id="sbtn-carboidrati">🍽️ Carbo</button>
+    <button class="sec-btn" onclick="showSection('glicemia')"     id="sbtn-glicemia">🩸 Glucometro</button>
+    <button class="sec-btn" onclick="showSection('libre')"        id="sbtn-libre">📡 Libre</button>
+    <button class="sec-btn" onclick="showSection('insulina')"     id="sbtn-insulina">💉 Insulina</button>
+    <button class="sec-btn" onclick="showSection('carboidrati')"  id="sbtn-carboidrati">🍽️ Carbo</button>
     <button class="sec-btn" onclick="showSection('correlazione')" id="sbtn-correlazione">🔗 Corr.</button>
-    <button class="sec-btn" onclick="showSection('giornaliero')" id="sbtn-giornaliero">📅 Giorno</button>
+    <button class="sec-btn" onclick="showSection('giornaliero')"  id="sbtn-giornaliero">📅 Giorno</button>
   </div>
 
   <!-- GLICEMIA -->
@@ -134,29 +134,28 @@
     </div>
   </div>
 
-  <!-- SENSORE -->
+  <!-- SENSORE (comparazione manuale - nascosta ma mantenuta per dati esistenti) -->
   <div id="sec-sensore" style="display:none">
-    <div class="info-box">📡 Confronta la lettura del <strong>Freestyle Libre</strong> con quella del <strong>glucometro</strong> fatte nello stesso momento. Così vedi quanto è accurato il sensore nel tempo.</div>
-    <div class="card">
-      <div class="card-title">Nuova comparazione</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
-        <div>
-          <div style="font-size:11px;font-weight:700;color:#3b82f6;margin-bottom:4px">🩸 GLUCOMETRO</div>
-          <input type="number" id="s-glucometro" placeholder="mg/dL" style="margin-bottom:0"/>
-        </div>
-        <div>
-          <div style="font-size:11px;font-weight:700;color:#8b5cf6;margin-bottom:4px">📡 LIBRE</div>
-          <input type="number" id="s-libre" placeholder="mg/dL" style="margin-bottom:0"/>
-        </div>
-      </div>
-      <input type="text" id="s-note" placeholder="Nota opzionale…" style="margin-bottom:8px"/>
-      <button class="btn" style="width:100%;background:#8b5cf6;color:#fff" onclick="addSensorReading()">Salva comparazione</button>
-    </div>
     <div id="s-content"></div>
-    <div id="s-empty" class="empty" style="display:none">
+  </div>
+
+  <!-- LIBRE -->
+  <div id="sec-libre" style="display:none">
+    <div class="info-box">📡 Importa i dati del <strong>Freestyle Libre</strong> scaricando il CSV da <strong>libreview.com</strong> → Cronologia del glucosio → Scarica i dati.</div>
+    <div class="card">
+      <div class="card-title">Importa CSV LibreView</div>
+      <button class="carb-photo-btn" onclick="document.getElementById('libre-csv-input').click()" style="margin-bottom:0">
+        <span style="font-size:22px">📂</span>
+        <span>Seleziona file CSV LibreView</span>
+      </button>
+      <input type="file" id="libre-csv-input" accept=".csv" style="display:none" onchange="importLibreCSV(event)"/>
+      <div id="libre-import-msg" style="font-size:12px;text-align:center;color:#94a3b8;min-height:16px;margin-top:8px"></div>
+    </div>
+    <div id="libre-content"></div>
+    <div id="libre-empty" class="empty" style="display:none">
       <div class="empty-icon">📡</div>
-      <div style="font-weight:700;color:#64748b">Nessuna comparazione ancora</div>
-      <div style="font-size:12px;margin-top:5px">Inserisci glucometro e Libre nello stesso momento</div>
+      <div style="font-weight:700;color:#64748b">Nessun dato Freestyle Libre</div>
+      <div style="font-size:12px;margin-top:5px">Importa il CSV da LibreView per vedere le statistiche</div>
     </div>
   </div>
 
@@ -250,13 +249,14 @@ let readings  = JSON.parse(localStorage.getItem('dt-readings')  || '[]');
 let insulin   = JSON.parse(localStorage.getItem('dt-insulin')   || '[]');
 let sensors   = JSON.parse(localStorage.getItem('dt-sensors')   || '[]');
 let meals     = JSON.parse(localStorage.getItem('dt-meals')     || '[]');
+let libreData = JSON.parse(localStorage.getItem('dt-libre')     || '[]');
 let currentSection = 'glicemia';
 let insulinType = 'rapida';
 let availDays = [], dayIdx = 0;
 let pendingFoods = []; // alimenti manuali in attesa
 
 const ANTHROPIC_API = '/.netlify/functions/analyze';
-let apiKey = localStorage.getItem('dt-apikey') || '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';
+let apiKey = localStorage.getItem('dt-apikey') || '';
 
 function saveApiKey() {
   const val = document.getElementById('api-key-input').value.trim();
@@ -278,6 +278,7 @@ function saveAll() {
   localStorage.setItem('dt-insulin',  JSON.stringify(insulin));
   localStorage.setItem('dt-sensors',  JSON.stringify(sensors));
   localStorage.setItem('dt-meals',    JSON.stringify(meals));
+  localStorage.setItem('dt-libre',    JSON.stringify(libreData));
 }
 
 // ── Zone ─────────────────────────────────────────────────────────────────────
@@ -298,8 +299,8 @@ const fmtDay  = d => new Date(d+'T12:00:00').toLocaleDateString('it-IT',{weekday
 const fmtShort= d => new Date(d+'T12:00:00').toLocaleDateString('it-IT',{day:'2-digit',month:'short'});
 
 // ── Section switcher ──────────────────────────────────────────────────────────
-const SECS  = ['glicemia','insulina','sensore','carboidrati','correlazione','giornaliero'];
-const SCOLS = {glicemia:'#3b82f6',insulina:'#8b5cf6',sensore:'#8b5cf6',carboidrati:'#f59e0b',correlazione:'#0ea5e9',giornaliero:'#059669'};
+const SECS  = ['glicemia','libre','insulina','carboidrati','correlazione','giornaliero','sensore'];
+const SCOLS = {glicemia:'#3b82f6',libre:'#8b5cf6',insulina:'#6366f1',carboidrati:'#f59e0b',correlazione:'#0ea5e9',giornaliero:'#059669',sensore:'#8b5cf6'};
 function showSection(s) {
   currentSection = s;
   SECS.forEach(x => {
@@ -314,6 +315,7 @@ function renderSection(s) {
   if (s==='glicemia')     renderGlicemia();
   if (s==='insulina')     renderInsulin();
   if (s==='sensore')      renderSensor();
+  if (s==='libre')        { renderLibre(); fetchLibreFromGitHub(); }
   if (s==='carboidrati')  renderCarb();
   if (s==='correlazione') renderCorrelation();
   if (s==='giornaliero')  renderDaily();
@@ -321,7 +323,7 @@ function renderSection(s) {
 function renderAll() { updateCounts(); renderSection(currentSection); }
 function updateCounts() {
   document.getElementById('sub-counts').textContent =
-    `${readings.length} glicemie · ${insulin.length} dosi · ${meals.length} pasti`;
+    `${readings.length} glicemie · ${insulin.length} dosi · ${libreData.length} libre`;
 }
 
 // ── Add readings ──────────────────────────────────────────────────────────────
@@ -427,6 +429,42 @@ function addMeal() {
 function deleteMeal(id){meals=meals.filter(m=>m.id!==id);saveAll();renderAll();}
 
 // ── Photo analysis (Claude AI) ────────────────────────────────────────────────
+function renderAiResult(note) {
+  const resultEl = document.getElementById('carb-ai-result');
+  if (!window._aiAlimenti) return;
+  const totale = window._aiAlimenti.reduce((s, a) => s + Math.round((a.carbo_per_100g || 0) * (a.quantita_g || 0) / 100), 0);
+  document.getElementById('carb-total').value = totale;
+  resultEl.innerHTML = `
+  <div class="carb-result">
+    <div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:10px">🤖 Analisi Claude — modifica i grammi</div>
+    ${window._aiAlimenti.map((a, i) => `
+    <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #dcfce7">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-size:13px;font-weight:600;color:#1e293b">${a.nome}</span>
+        <span style="font-size:11px;color:#f59e0b;font-weight:700">${Math.round((a.carbo_per_100g||0)*(a.quantita_g||0)/100)}g carbo</span>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <div style="flex:1">
+          <div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Grammi mangiati</div>
+          <input type="number" value="${a.quantita_g}" min="0" max="2000"
+            oninput="window._aiAlimenti[${i}].quantita_g=parseFloat(this.value)||0; renderAiResult('${note}')"
+            style="width:100%;padding:6px 10px;border:2px solid #e2e8f0;border-radius:9px;font-size:14px;font-weight:700;color:#1e293b"/>
+        </div>
+        <div style="text-align:center;min-width:70px">
+          <div style="font-size:10px;color:#94a3b8;margin-bottom:2px">Carbo/100g</div>
+          <div style="font-size:14px;font-weight:700;color:#f59e0b">${a.carbo_per_100g||0}g</div>
+        </div>
+      </div>
+    </div>`).join('')}
+    <div class="carb-item" style="border-top:2px solid #bbf7d0;padding-top:8px;border-bottom:none">
+      <span style="font-weight:700">TOTALE CARBOIDRATI</span>
+      <span style="color:#f59e0b;font-size:18px;font-weight:800">${totale}g</span>
+    </div>
+    ${note?`<div style="font-size:11px;color:#64748b;margin-top:6px">💬 ${note}</div>`:''}
+  </div>`;
+  document.getElementById('carb-total').value = totale;
+}
+
 async function resizeImage(file, maxWidth=800) {
   return new Promise((resolve) => {
     const img = new Image();
@@ -474,20 +512,10 @@ async function analyzePhoto(event) {
     document.getElementById('carb-total').value = parsed.totale_carbo_g;
     renderFoodTags();
 
-    resultEl.innerHTML = `
-    <div class="carb-result">
-      <div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:8px">🤖 Analisi Claude</div>
-      ${parsed.alimenti.map(a=>`
-      <div class="carb-item">
-        <span>${a.nome} <span style="color:#94a3b8;font-size:11px">(~${a.quantita_g}g)</span></span>
-        <span style="font-weight:700;color:#f59e0b">${a.carbo_g}g carbo</span>
-      </div>`).join('')}
-      <div class="carb-item" style="padding-top:8px;margin-top:4px;border-top:2px solid #bbf7d0;border-bottom:none">
-        <span>TOTALE CARBOIDRATI</span>
-        <span style="color:#f59e0b;font-size:17px">${parsed.totale_carbo_g}g</span>
-      </div>
-      ${parsed.note?`<div style="font-size:11px;color:#64748b;margin-top:6px">💬 ${parsed.note}</div>`:''}
-    </div>`;
+    // Store AI results globally for recalculation
+    window._aiAlimenti = parsed.alimenti.map(a => ({...a}));
+    renderAiResult(parsed.note || '');
+    resultEl = null; // prevent double render
   } catch(err) {
     resultEl.innerHTML = `<div class="ai-error">❌ Errore nell'analisi: ${err.message}. Inserisci i carbo manualmente.</div>`;
   }
@@ -928,7 +956,7 @@ function renderDaily() {
 
 // ── Export / Import ───────────────────────────────────────────────────────────
 function exportData() {
-  const data={version:2,exportedAt:new Date().toISOString(),readings,insulin,sensors,meals};
+  const data={version:3,exportedAt:new Date().toISOString(),readings,insulin,sensors,meals,libre:libreData};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url; a.download='diabete-backup-'+new Date().toISOString().slice(0,10)+'.json';
@@ -947,8 +975,9 @@ function importData(event) {
       insulin=merge(insulin,data.insulin);
       sensors=merge(sensors,data.sensors||[]);
       meals=merge(meals,data.meals||[]);
+      libreData=merge(libreData,data.libre||[]);
       saveAll(); renderAll();
-      showBackupMsg(`✅ Importati ${data.readings.length} glicemie, ${data.insulin.length} dosi, ${(data.meals||[]).length} pasti.`,'#16a34a');
+      showBackupMsg(`✅ Importati ${data.readings.length} glicemie, ${data.insulin.length} dosi, ${(data.libre||[]).length} libre.`,'#16a34a');
     } catch(err){ showBackupMsg('❌ File non valido.','#dc2626'); }
     event.target.value='';
   };
@@ -958,6 +987,217 @@ function showBackupMsg(msg,color){
   const el=document.getElementById('backup-msg');
   el.textContent=msg; el.style.color=color;
   setTimeout(()=>{el.textContent='';},5000);
+}
+
+// ── Fetch Libre from GitHub ──────────────────────────────────────────────────
+const LIBRE_GITHUB_URL = 'https://raw.githubusercontent.com/guarientoluca-debug/diabete-tracker/main/libre-data.json';
+let libreLastFetch = 0;
+
+async function fetchLibreFromGitHub() {
+  // Non rifetchare se è passato meno di 5 minuti
+  const now = Date.now();
+  if (now - libreLastFetch < 5 * 60 * 1000) return;
+  libreLastFetch = now;
+
+  const msgEl = document.getElementById('libre-import-msg');
+  if (msgEl) { msgEl.textContent = '🔄 Aggiornamento da GitHub…'; msgEl.style.color = '#94a3b8'; }
+
+  try {
+    const res = await fetch(LIBRE_GITHUB_URL + '?t=' + now);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!Array.isArray(data) || !data.length) {
+      if (msgEl) { msgEl.textContent = 'ℹ️ Nessun dato Libre su GitHub ancora.'; }
+      return;
+    }
+
+    // Merge incrementale
+    const existingIds = new Set(libreData.map(r => r.id));
+    const added = data.filter(r => !existingIds.has(r.id));
+    if (added.length > 0) {
+      libreData = [...libreData, ...added].sort((a,b) => new Date(a.date)-new Date(b.date));
+      saveAll();
+      renderLibre();
+      if (msgEl) { msgEl.textContent = `✅ Aggiunte ${added.length} nuove letture da GitHub (tot. ${libreData.length})`; msgEl.style.color = '#16a34a'; }
+    } else {
+      if (msgEl) { msgEl.textContent = `✅ Dati aggiornati — ${libreData.length} letture totali`; msgEl.style.color = '#16a34a'; }
+    }
+    setTimeout(() => { if (msgEl) msgEl.textContent = ''; }, 4000);
+  } catch(err) {
+    if (msgEl) { msgEl.textContent = '⚠️ Aggiornamento automatico non disponibile — usa Importa CSV'; msgEl.style.color = '#f59e0b'; }
+  }
+}
+
+// ── Render LIBRE ─────────────────────────────────────────────────────────────
+let libreTab = 'stats';
+function renderLibre() {
+  const el=document.getElementById('libre-content'), empty=document.getElementById('libre-empty');
+  if(!libreData.length){el.innerHTML='';empty.style.display='';return;}
+  empty.style.display='none';
+
+  const vals=libreData.map(r=>r.value);
+  const avg=Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
+  const minV=Math.min(...vals), maxV=Math.max(...vals);
+  const tir=Math.round(vals.filter(v=>v>=70&&v<=180).length/vals.length*100);
+  const ipo=vals.filter(v=>v<70).length;
+  const iper=vals.filter(v=>v>180).length;
+  const tirColor=tir>=70?'#22c55e':tir>=50?'#f59e0b':'#ef4444';
+
+  // Chart last 48h
+  const now=new Date(), h48ago=new Date(now-48*3600000);
+  const recent=libreData.filter(r=>new Date(r.date)>=h48ago).slice(-96);
+  const W=300,H=85,pad=13;
+  let chartSVG='';
+  if(recent.length>1){
+    const cVals=recent.map(r=>r.value);
+    const cMin=Math.min(...cVals,60),cMax=Math.max(...cVals,200),cRange=cMax-cMin||1;
+    const pts=recent.map((r,i)=>`${pad+(i/(recent.length-1))*(W-pad*2)},${H-pad-((r.value-cMin)/cRange)*(H-pad*2)}`).join(' ');
+    const ry=H-pad-((180-cMin)/cRange)*(H-pad*2), rh=((180-70)/cRange)*(H-pad*2);
+    const circles=recent.filter((_,i)=>i%Math.ceil(recent.length/20)===0).map((r,i)=>{
+      const idx=recent.indexOf(r);
+      const x=pad+(idx/(recent.length-1))*(W-pad*2),y=H-pad-((r.value-cMin)/cRange)*(H-pad*2);
+      return `<circle cx="${x}" cy="${y}" r="2.5" fill="${getZone(r.value).dot}" stroke="#fff" stroke-width="1"/>`;
+    }).join('');
+    chartSVG=`<div class="card" style="padding:14px">
+      <div class="card-title">Ultime 48 ore (${recent.length} letture)</div>
+      <svg width="100%" viewBox="0 0 ${W} ${H}" style="overflow:visible">
+        <rect x="${pad}" y="${ry}" width="${W-pad*2}" height="${rh}" fill="#f0fdf4" rx="3"/>
+        <polyline points="${pts}" fill="none" stroke="#8b5cf6" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+        ${circles}
+      </svg>
+    </div>`;
+  }
+
+  // Distribution zones
+  const zones=[
+    {label:'Ipo < 70',count:ipo,color:'#ef4444'},
+    {label:'Normale 70–99',count:vals.filter(v=>v>=70&&v<=99).length,color:'#22c55e'},
+    {label:'Pre-diab 100–125',count:vals.filter(v=>v>=100&&v<=125).length,color:'#f59e0b'},
+    {label:'Alta 126–180',count:vals.filter(v=>v>=126&&v<=180).length,color:'#f97316'},
+    {label:'Iper > 180',count:iper,color:'#dc2626'},
+  ].filter(z=>z.count>0);
+
+  // Per-hour average
+  const byHour=Array(24).fill(null).map((_,h)=>{
+    const hv=libreData.filter(r=>new Date(r.date).getHours()===h).map(r=>r.value);
+    return hv.length?Math.round(hv.reduce((a,b)=>a+b,0)/hv.length):null;
+  });
+
+  el.innerHTML=`
+  <div class="tab-bar">
+    <button class="tab-btn${libreTab==='stats'?' active':''}" onclick="setLibreTab('stats')" style="${libreTab==='stats'?'background:#8b5cf6':''}">Statistiche</button>
+    <button class="tab-btn${libreTab==='chart'?' active':''}" onclick="setLibreTab('chart')" style="${libreTab==='chart'?'background:#8b5cf6':''}">Grafico</button>
+    <button class="tab-btn${libreTab==='ore'?' active':''}" onclick="setLibreTab('ore')" style="${libreTab==='ore'?'background:#8b5cf6':''}">Per ora</button>
+  </div>
+
+  ${libreTab==='stats'?`
+  <div class="stat-grid">
+    <div class="stat-box"><div class="stat-label">Media</div><div class="stat-val" style="color:${getZone(avg).color}">${avg}</div><div class="stat-unit">mg/dL</div></div>
+    <div class="stat-box"><div class="stat-label">TIR</div><div class="stat-val" style="color:${tirColor}">${tir}%</div></div>
+    <div class="stat-box"><div class="stat-label">Min</div><div class="stat-val" style="color:${getZone(minV).color}">${minV}</div><div class="stat-unit">mg/dL</div></div>
+    <div class="stat-box"><div class="stat-label">Max</div><div class="stat-val" style="color:${getZone(maxV).color}">${maxV}</div><div class="stat-unit">mg/dL</div></div>
+  </div>
+  <div class="stat-grid">
+    <div class="stat-box"><div class="stat-label">Letture tot.</div><div class="stat-val" style="color:#64748b">${vals.length}</div></div>
+    <div class="stat-box"><div class="stat-label">Ipo &lt;70</div><div class="stat-val" style="color:#ef4444">${ipo}</div></div>
+    <div class="stat-box"><div class="stat-label">Iper &gt;180</div><div class="stat-val" style="color:#dc2626">${iper}</div></div>
+    <div class="stat-box"><div class="stat-label">HbA1c est.</div><div class="stat-val" style="color:#8b5cf6">${((avg+46.7)/28.7).toFixed(1)}%</div></div>
+  </div>
+  <div class="card">
+    <div class="card-title">Distribuzione valori</div>
+    ${zones.map(z=>`<div style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:2px">
+        <span style="color:#64748b">${z.label}</span>
+        <span style="font-weight:700;color:${z.color}">${z.count} (${Math.round(z.count/vals.length*100)}%)</span>
+      </div>
+      <div class="dist-bar-bg"><div class="dist-bar" style="width:${z.count/vals.length*100}%;background:${z.color}"></div></div>
+    </div>`).join('')}
+  </div>`:''}
+
+  ${libreTab==='chart'?chartSVG:''}
+
+  ${libreTab==='ore'?`
+  <div class="card">
+    <div class="card-title">Media glicemia per ora del giorno</div>
+    ${byHour.map((v,h)=>v?`
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="font-size:11px;color:#94a3b8;width:38px;flex:none">${String(h).padStart(2,'0')}:00</div>
+      <div style="flex:1;background:#f1f5f9;border-radius:6px;height:16px;overflow:hidden">
+        <div style="width:${Math.min(100,(v-40)/200*100)}%;background:${getZone(v).color};height:16px;border-radius:6px;transition:width .3s"></div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:${getZone(v).color};width:38px;text-align:right">${v}</div>
+    </div>`:'').join('')}
+  </div>`:''}`;
+}
+function setLibreTab(t){libreTab=t;renderLibre();}
+
+// ── Import Libre CSV ──────────────────────────────────────────────────────────
+function importLibreCSV(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const msgEl = document.getElementById('libre-import-msg');
+  msgEl.textContent = '⏳ Elaborazione in corso…';
+  msgEl.style.color = '#94a3b8';
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const lines = e.target.result.split('\n');
+      const newReadings = [];
+      const INTERVAL_MS = 150 * 60 * 1000; // 150 min campionamento
+      let lastTime = null;
+
+      for (let i = 2; i < lines.length; i++) {
+        const parts = lines[i].split(',');
+        if (parts.length < 5) continue;
+        try {
+          const ts = parts[2].trim();
+          const type = parts[3].trim();
+          let val = null;
+          if (type === '0' && parts[4].trim()) val = parseInt(parts[4].trim());
+          else if (type === '1' && parts[5] && parts[5].trim()) val = parseInt(parts[5].trim());
+          if (!val || val < 30 || val > 500) continue;
+
+          // Parse date dd-mm-yyyy HH:MM or MM/dd/yyyy HH:MM
+          let dt;
+          if (ts.includes('-')) {
+            const [datePart, timePart] = ts.split(' ');
+            const [d,m,y] = datePart.split('-');
+            dt = new Date(`${y}-${m}-${d}T${timePart}:00`);
+          } else {
+            dt = new Date(ts);
+          }
+          if (isNaN(dt.getTime())) continue;
+
+          // Campiona ogni 150 min
+          if (lastTime && dt.getTime() - lastTime < INTERVAL_MS) continue;
+
+          newReadings.push({ id: dt.getTime(), value: val, date: dt.toISOString() });
+          lastTime = dt.getTime();
+        } catch(e2) { continue; }
+      }
+
+      if (!newReadings.length) {
+        msgEl.textContent = '❌ Nessuna lettura trovata nel file.';
+        msgEl.style.color = '#dc2626';
+        return;
+      }
+
+      // Merge incrementale - aggiungi solo nuovi (per id)
+      const existingIds = new Set(libreData.map(r => r.id));
+      const added = newReadings.filter(r => !existingIds.has(r.id));
+      libreData = [...libreData, ...added].sort((a,b) => new Date(a.date)-new Date(b.date));
+      saveAll();
+      renderAll();
+      msgEl.textContent = `✅ Aggiunte ${added.length} nuove letture (tot. ${libreData.length})`;
+      msgEl.style.color = '#16a34a';
+    } catch(err) {
+      msgEl.textContent = '❌ Errore: ' + err.message;
+      msgEl.style.color = '#dc2626';
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
