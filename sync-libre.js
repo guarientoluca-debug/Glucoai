@@ -29,7 +29,7 @@ function request(hostname, path, method, extraHeaders, body) {
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
         try { resolve({ status: res.statusCode, data: JSON.parse(data) }); }
-        catch(e) { resolve({ status: res.statusCode, raw: data.substring(0,300) }); }
+        catch(e) { resolve({ status: res.statusCode, raw: data.substring(0,500) }); }
       });
     });
     req.on('error', reject);
@@ -58,18 +58,32 @@ async function login() {
   const token = res.data?.data?.authTicket?.token;
   if (token) { console.log('✅ Login OK'); return token; }
 
-  console.log('Risposta:', JSON.stringify(res.data || res.raw || '').substring(0, 500));
+  console.log('Risposta login:', JSON.stringify(res.data || res.raw || '').substring(0, 500));
   throw new Error('Token non trovato nella risposta');
 }
 
 async function getConnections(token) {
   const res = await request(host(), '/llu/connections', 'GET', { 'Authorization': `Bearer ${token}` });
-  return res.data?.data || [];
+  console.log('Risposta connections status:', res.status);
+  console.log('Risposta connections raw:', JSON.stringify(res.data || res.raw || '').substring(0, 500));
+  
+  // Prova diverse strutture possibili
+  const data = res.data;
+  if (Array.isArray(data?.data)) return data.data;
+  if (Array.isArray(data)) return data;
+  if (data?.data && typeof data.data === 'object') return [data.data];
+  return [];
 }
 
 async function getGraph(token, patientId) {
   const res = await request(host(), `/llu/connections/${patientId}/graph`, 'GET', { 'Authorization': `Bearer ${token}` });
-  return res.data?.data?.graphData || [];
+  console.log('Graph status:', res.status);
+  
+  const data = res.data;
+  // Prova diverse strutture
+  const graphData = data?.data?.graphData || data?.graphData || data?.data || [];
+  console.log('📊 Letture ricevute:', Array.isArray(graphData) ? graphData.length : 'non array');
+  return Array.isArray(graphData) ? graphData : [];
 }
 
 async function main() {
@@ -80,10 +94,14 @@ async function main() {
 
     let graphData = [];
     if (connections.length > 0) {
-      console.log(`👤 Paziente: ${connections[0].firstName || connections[0].patientId}`);
-      graphData = await getGraph(token, connections[0].patientId);
+      const patient = connections[0];
+      const patientId = patient.patientId || patient.id || patient.PatientId;
+      console.log(`👤 Paziente: ${patient.firstName || patientId}`);
+      console.log(`🆔 PatientId: ${patientId}`);
+      graphData = await getGraph(token, patientId);
+    } else {
+      console.log('⚠️ Nessuna connessione trovata');
     }
-    console.log(`📊 Letture ricevute: ${graphData.length}`);
 
     let existing = [];
     if (fs.existsSync('libre-data.json')) {
