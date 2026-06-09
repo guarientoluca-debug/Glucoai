@@ -100,7 +100,6 @@ async function login() {
 async function getConnections(token) {
   const res = await request(host(), '/llu/connections', 'GET', {
     'Authorization': `Bearer ${token}`,
-    'account-id': accountId,
   });
   console.log('Connections status:', res.status);
   if (res.status !== 200) {
@@ -117,7 +116,6 @@ async function getConnections(token) {
 async function getGraph(token, patientId) {
   const res = await request(host(), `/llu/connections/${patientId}/graph`, 'GET', {
     'Authorization': `Bearer ${token}`,
-    'account-id': accountId,
   });
   console.log('Graph status:', res.status);
 
