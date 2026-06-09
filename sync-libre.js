@@ -34,7 +34,7 @@ function request(hostname, path, method, extraHeaders, body) {
       res.on('end', () => {
         const buffer = Buffer.concat(chunks);
         const encoding = res.headers['content-encoding'];
-        
+
         const decompress = (buf) => {
           try { return JSON.parse(buf.toString()); }
           catch(e) { return null; }
@@ -77,16 +77,19 @@ async function login() {
   let res = await request(host(), '/llu/auth/login', 'POST', {}, { email: EMAIL, password: PASSWORD });
   console.log('Status:', res.status);
 
+  // Gestisci redirect regionale
   if (res.data?.data?.redirect && res.data?.data?.region) {
     REGION = res.data.data.region;
     console.log('🌍 Redirect a regione:', REGION);
+    // Secondo login sulla regione corretta
     res = await request(host(), '/llu/auth/login', 'POST', {}, { email: EMAIL, password: PASSWORD });
     console.log('Status dopo redirect:', res.status);
   }
 
+  // Estrai token e accountId dal login finale (quello sulla regione corretta)
   const token = res.data?.data?.authTicket?.token;
   accountId = res.data?.data?.user?.id || '';
-  console.log('AccountId:', accountId ? '✅ trovato' : '❌ non trovato');
+  console.log('AccountId:', accountId ? `✅ trovato (${accountId.substring(0,8)}...)` : '❌ non trovato');
 
   if (token) { console.log('✅ Login OK'); return token; }
 
@@ -100,7 +103,9 @@ async function getConnections(token) {
     'account-id': accountId,
   });
   console.log('Connections status:', res.status);
-  console.log('Connections raw:', JSON.stringify(res.data || res.raw || '').substring(0, 300));
+  if (res.status !== 200) {
+    console.log('Connections error:', JSON.stringify(res.data || res.raw || '').substring(0, 300));
+  }
 
   const data = res.data;
   if (Array.isArray(data?.data)) return data.data;
