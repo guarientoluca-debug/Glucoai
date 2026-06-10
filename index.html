@@ -283,6 +283,7 @@
       </div>
     </div>
 
+    <button class="btn" onclick="saveInsulinConfig()" style="width:100%;background:#6366f1;color:#fff;font-size:12px;margin-bottom:8px">Salva configurazione</button>
     <!-- Parametri calcolo (avanzati, collassabili) -->
     <div style="margin-bottom:8px">
       <button onclick="toggleAdvanced()" style="background:none;border:none;font-size:11px;font-weight:700;color:#94a3b8;cursor:pointer;width:100%;text-align:center;padding:4px">
@@ -653,7 +654,7 @@ function renderSection(s) {
   if (s==='insulina')     renderInsulin();
   if (s==='sensore')      renderSensor();
   if (s==='libre')        { renderLibre(); fetchLibreFromGitHub(); }
-  if (s==='carboidrati')  renderCarb();
+  if (s==='carboidrati')  { renderCarb(); prefillPrescribedDose(); }
   if (s==='correlazione') renderCorrelation();
   if (s==='giornaliero')  renderDaily();
 }
