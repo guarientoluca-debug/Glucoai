@@ -565,7 +565,7 @@ function prefillPrescribedDose() {
   if (!timingEl || !doseEl || !insulinConfig.dosePerPasto) return;
   const timing = timingEl.value;
   const dose = insulinConfig.dosePerPasto[timing] || 0;
-  if (dose > 0 && !doseEl.value) doseEl.value = dose;
+  if (dose > 0) doseEl.value = dose;
   calcInsulinDose();
 }
 
