@@ -70,6 +70,13 @@
   #carb-photo-input{display:none}
   .food-tag{display:inline-flex;align-items:center;gap:4px;background:#e0f2fe;color:#0369a1;border-radius:8px;padding:3px 9px;font-size:12px;font-weight:600;margin:3px}
   .food-tag button{background:none;border:none;cursor:pointer;color:#0369a1;font-size:13px;line-height:1;padding:0}
+  .ins-calc{background:linear-gradient(135deg,#eff6ff,#f5f3ff);border:2px solid #bfdbfe;border-radius:14px;padding:14px;margin-bottom:10px}
+  .ins-calc-title{font-size:11px;font-weight:700;color:#3b82f6;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px}
+  .ins-dose-big{font-size:32px;font-weight:800;line-height:1}
+  .ins-delta-pos{color:#ef4444;font-weight:700;font-size:13px}
+  .ins-delta-neg{color:#22c55e;font-weight:700;font-size:13px}
+  .ins-delta-ok{color:#94a3b8;font-weight:700;font-size:13px}
+  .config-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -178,7 +185,7 @@
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div>
           <div style="font-size:11px;font-weight:700;color:#f59e0b;margin-bottom:4px">🌾 CARBO TOTALI (g)</div>
-          <input type="number" id="carb-total" placeholder="es. 65"/>
+          <input type="number" id="carb-total" placeholder="es. 65" oninput="calcInsulinDose()"/>
         </div>
         <div>
           <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:4px">📍 PASTO</div>
@@ -190,6 +197,10 @@
           </select>
         </div>
       </div>
+      <!-- Calcolatore insulina -->
+      <div style="font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">💉 Correzione glicemica (opzionale)</div>
+      <input type="number" id="carb-current-glucose" placeholder="Glicemia attuale (mg/dL)" oninput="calcInsulinDose()"/>
+      <div id="insulin-calc-result"></div>
       <input type="text" id="carb-note" placeholder="Nota (es. pizza margherita)…"/>
       <button class="btn" style="width:100%;background:#f59e0b;color:#fff" onclick="addMeal()">Salva pasto</button>
     </div>
@@ -225,6 +236,38 @@
     </div>
     <div id="api-key-msg" style="font-size:11px;color:#94a3b8;margin-bottom:14px;min-height:14px"></div>
   </div>
+  <!-- CONFIGURAZIONE INSULINA -->
+  <div style="border-top:1px solid #e2e8f0;padding-top:16px;margin-top:16px">
+    <div style="font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;margin-bottom:9px;text-align:center">💉 Configurazione insulina (dal diabetologo)</div>
+    <div class="config-grid">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:#8b5cf6;margin-bottom:3px">🌙 LENTA BASE (U/giorno)</div>
+        <input type="number" id="cfg-lenta" placeholder="es. 20" style="margin-bottom:0"/>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:#3b82f6;margin-bottom:3px">⚡ RAPIDA BASE (U/pasto)</div>
+        <input type="number" id="cfg-rapida" placeholder="es. 8" style="margin-bottom:0"/>
+      </div>
+    </div>
+    <div class="config-grid" style="margin-top:8px">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:#f59e0b;margin-bottom:3px">🌾 RAPPORTO (g carbo per 1U)</div>
+        <input type="number" id="cfg-ratio" placeholder="es. 10" style="margin-bottom:0"/>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:#22c55e;margin-bottom:3px">🎯 GLICEMIA TARGET (mg/dL)</div>
+        <input type="number" id="cfg-target" placeholder="es. 120" style="margin-bottom:0"/>
+      </div>
+    </div>
+    <div style="margin-top:8px">
+      <div style="font-size:10px;font-weight:700;color:#ef4444;margin-bottom:3px">📉 ISF — 1U abbassa di X mg/dL</div>
+      <input type="number" id="cfg-isf" placeholder="es. 50"/>
+    </div>
+    <button class="btn" onclick="saveInsulinConfig()" style="width:100%;background:#6366f1;color:#fff;font-size:12px">Salva configurazione</button>
+    <button class="btn" onclick="calcRatioWithAI()" style="width:100%;background:#0ea5e9;color:#fff;font-size:12px;margin-top:6px">🤖 Calcola rapporto con AI</button>
+    <div id="cfg-msg" style="font-size:11px;text-align:center;color:#94a3b8;margin-top:6px;min-height:14px"></div>
+    <div id="cfg-ai-result"></div>
+  </div>
   <!-- BACKUP -->
   <div style="border-top:1px solid #e2e8f0;padding-top:16px">
     <div style="font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;margin-bottom:9px;text-align:center">💾 Backup dati</div>
@@ -245,6 +288,7 @@ let insulin   = JSON.parse(localStorage.getItem('dt-insulin')   || '[]');
 let sensors   = JSON.parse(localStorage.getItem('dt-sensors')   || '[]');
 let meals     = JSON.parse(localStorage.getItem('dt-meals')     || '[]');
 let libreData = JSON.parse(localStorage.getItem('dt-libre')     || '[]');
+let insulinConfig = JSON.parse(localStorage.getItem('dt-ins-config') || '{"lentaBase":0,"rapidaBase":0,"carbRatio":10,"targetGlucose":120,"isf":50}');
 let currentSection = 'glicemia';
 let insulinType = 'rapida';
 let availDays = [], dayIdx = 0;
@@ -274,6 +318,150 @@ function saveAll() {
   localStorage.setItem('dt-sensors',  JSON.stringify(sensors));
   localStorage.setItem('dt-meals',    JSON.stringify(meals));
   localStorage.setItem('dt-libre',    JSON.stringify(libreData));
+  localStorage.setItem('dt-ins-config', JSON.stringify(insulinConfig));
+}
+
+function saveInsulinConfig() {
+  insulinConfig = {
+    lentaBase:    parseFloat(document.getElementById('cfg-lenta').value)  || 0,
+    rapidaBase:   parseFloat(document.getElementById('cfg-rapida').value) || 0,
+    carbRatio:    parseFloat(document.getElementById('cfg-ratio').value)  || 10,
+    targetGlucose:parseFloat(document.getElementById('cfg-target').value) || 120,
+    isf:          parseFloat(document.getElementById('cfg-isf').value)    || 50,
+  };
+  localStorage.setItem('dt-ins-config', JSON.stringify(insulinConfig));
+  const msg = document.getElementById('cfg-msg');
+  msg.textContent = '✅ Configurazione salvata!';
+  msg.style.color = '#16a34a';
+  setTimeout(() => { msg.textContent = ''; }, 3000);
+  calcInsulinDose();
+}
+
+async function calcRatioWithAI() {
+  const msgEl = document.getElementById('cfg-msg');
+  const resultEl = document.getElementById('cfg-ai-result');
+
+  // Controlla dati disponibili
+  const pairsCount = meals.filter(m => {
+    const mealTime = new Date(m.date).getTime();
+    return m.carbs > 0 && insulin.some(i => i.type === 'rapida' && Math.abs(new Date(i.date).getTime() - mealTime) <= 30*60000);
+  }).length;
+
+  if (pairsCount === 0) {
+    msgEl.textContent = '⚠️ Registra almeno un pasto con carbo + dose insulina rapida entro 30 min';
+    msgEl.style.color = '#f59e0b';
+    return;
+  }
+
+  msgEl.textContent = `🤖 Analizzo ${pairsCount} pasti con insulina…`;
+  msgEl.style.color = '#0ea5e9';
+  resultEl.innerHTML = '';
+
+  try {
+    const resp = await fetch('/.netlify/functions/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        analysisType: 'insulin-ratio',
+        data: {
+          meals: meals.slice(-90),    // ultimi 90 pasti
+          insulin: insulin.slice(-200),
+          readings: readings.slice(-200),
+          currentConfig: insulinConfig
+        }
+      })
+    });
+
+    const parsed = await resp.json();
+    if (!parsed.rapporto_g_per_u) throw new Error(parsed.error || 'Risposta non valida');
+
+    const confidenzaColor = parsed.confidenza === 'alta' ? '#22c55e' : parsed.confidenza === 'media' ? '#f59e0b' : '#ef4444';
+    const confidenzaEmoji = parsed.confidenza === 'alta' ? '🟢' : parsed.confidenza === 'media' ? '🟡' : '🔴';
+
+    resultEl.innerHTML = `
+    <div style="background:#f0fdf4;border:2px solid #bbf7d0;border-radius:13px;padding:13px;margin-top:10px">
+      <div style="font-size:10px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">🤖 Analisi AI completata</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div>
+          <div style="font-size:11px;color:#94a3b8;margin-bottom:2px">Rapporto suggerito</div>
+          <div style="font-size:28px;font-weight:800;color:#16a34a">${parsed.rapporto_g_per_u}g<span style="font-size:14px;font-weight:500;color:#94a3b8"> per 1U</span></div>
+        </div>
+        <div style="flex:1;text-align:right">
+          <div style="font-size:11px;color:#94a3b8">Confidenza</div>
+          <div style="font-size:14px;font-weight:700;color:${confidenzaColor}">${confidenzaEmoji} ${parsed.confidenza}</div>
+          <div style="font-size:10px;color:#94a3b8">${parsed.campioni_usati} campioni</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#1e293b;margin-bottom:6px">💬 ${parsed.spiegazione}</div>
+      ${parsed.note_cliniche ? `<div style="font-size:11px;color:#64748b;background:#f8fafc;border-radius:8px;padding:8px">⚕️ ${parsed.note_cliniche}</div>` : ''}
+      <button class="btn" onclick="applyAIRatio(${parsed.rapporto_g_per_u})" style="width:100%;background:#16a34a;color:#fff;font-size:12px;margin-top:10px">✅ Applica rapporto ${parsed.rapporto_g_per_u}g/U</button>
+    </div>`;
+
+    msgEl.textContent = '';
+  } catch(err) {
+    msgEl.textContent = '❌ ' + err.message;
+    msgEl.style.color = '#dc2626';
+  }
+}
+
+function applyAIRatio(ratio) {
+  insulinConfig.carbRatio = ratio;
+  document.getElementById('cfg-ratio').value = ratio;
+  localStorage.setItem('dt-ins-config', JSON.stringify(insulinConfig));
+  document.getElementById('cfg-msg').textContent = `✅ Rapporto ${ratio}g/U applicato!`;
+  document.getElementById('cfg-msg').style.color = '#16a34a';
+  document.getElementById('cfg-ai-result').innerHTML = '';
+  setTimeout(() => { document.getElementById('cfg-msg').textContent = ''; }, 3000);
+  calcInsulinDose();
+}
+
+function calcInsulinDose() {
+  const carbs = parseFloat(document.getElementById('carb-total')?.value) || 0;
+  const currentGlucose = parseFloat(document.getElementById('carb-current-glucose')?.value) || 0;
+  const el = document.getElementById('insulin-calc-result');
+  if (!el) return;
+
+  if (!carbs || !insulinConfig.carbRatio) { el.innerHTML = ''; return; }
+
+  const doseCarbo = carbs / insulinConfig.carbRatio;
+  let doseCorrezione = 0;
+  if (currentGlucose && insulinConfig.isf) {
+    doseCorrezione = (currentGlucose - insulinConfig.targetGlucose) / insulinConfig.isf;
+  }
+  const doseTotal = Math.max(0, doseCarbo + doseCorrezione);
+  const doseTotalRounded = Math.round(doseTotal * 2) / 2; // arrotonda a 0.5U
+
+  const delta = insulinConfig.rapidaBase ? doseTotalRounded - insulinConfig.rapidaBase : null;
+  const deltaClass = delta === null ? '' : delta > 0 ? 'ins-delta-pos' : delta < 0 ? 'ins-delta-neg' : 'ins-delta-ok';
+  const deltaText = delta === null ? '' : delta > 0 ? `+${delta.toFixed(1)}U rispetto alla tua base` : delta < 0 ? `${delta.toFixed(1)}U rispetto alla tua base` : 'uguale alla tua base';
+
+  const corrText = doseCorrezione !== 0 ? `
+    <div style="font-size:11px;color:#64748b;margin-top:4px">
+      ${doseCarbo.toFixed(1)}U per i carbo
+      ${doseCorrezione > 0 ? `+ ${doseCorrezione.toFixed(1)}U correzione iperglicemia` : `− ${Math.abs(doseCorrezione).toFixed(1)}U correzione ipoglicemia`}
+    </div>` : '';
+
+  const configOk = insulinConfig.carbRatio > 0;
+  if (!configOk) { el.innerHTML = '<div style="font-size:12px;color:#f59e0b;padding:8px">⚠️ Configura il rapporto insulina/carbo in basso</div>'; return; }
+
+  el.innerHTML = `
+  <div class="ins-calc">
+    <div class="ins-calc-title">💉 Dose insulina rapida suggerita</div>
+    <div style="display:flex;align-items:flex-end;gap:10px;margin-bottom:6px">
+      <div>
+        <div class="ins-dose-big" style="color:#3b82f6">${doseTotalRounded} <span style="font-size:14px;font-weight:500;color:#94a3b8">U ⚡</span></div>
+        ${delta !== null ? `<div class="${deltaClass}">${deltaText}</div>` : ''}
+      </div>
+      ${insulinConfig.lentaBase ? `
+      <div style="text-align:right;flex:1">
+        <div style="font-size:10px;color:#8b5cf6;font-weight:700">🌙 LENTA BASE</div>
+        <div style="font-size:18px;font-weight:800;color:#8b5cf6">${insulinConfig.lentaBase} U</div>
+        <div style="font-size:10px;color:#94a3b8">invariata</div>
+      </div>` : ''}
+    </div>
+    ${corrText}
+    <div style="font-size:10px;color:#94a3b8;margin-top:6px">📊 ${carbs}g ÷ ${insulinConfig.carbRatio}g/U${currentGlucose ? ` · glicemia ${currentGlucose} mg/dL (target ${insulinConfig.targetGlucose})` : ''}</div>
+  </div>`;
 }
 
 // ── Zone ─────────────────────────────────────────────────────────────────────
@@ -1178,6 +1366,12 @@ if (apiKey) {
   document.getElementById('api-key-msg').textContent = '🔑 Chiave API configurata ✓';
   document.getElementById('api-key-msg').style.color = '#94a3b8';
 }
+// Popola campi configurazione insulina
+if (insulinConfig.lentaBase)     document.getElementById('cfg-lenta').value    = insulinConfig.lentaBase;
+if (insulinConfig.rapidaBase)    document.getElementById('cfg-rapida').value   = insulinConfig.rapidaBase;
+if (insulinConfig.carbRatio)     document.getElementById('cfg-ratio').value    = insulinConfig.carbRatio;
+if (insulinConfig.targetGlucose) document.getElementById('cfg-target').value   = insulinConfig.targetGlucose;
+if (insulinConfig.isf)           document.getElementById('cfg-isf').value      = insulinConfig.isf;
 showSection('glicemia');
 </script>
 </body>
