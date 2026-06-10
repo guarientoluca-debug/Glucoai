@@ -80,6 +80,37 @@ Rispondi SOLO con JSON valido senza markdown, formato:
 {"rapporto_g_per_u": 10, "confidenza": "alta|media|bassa", "spiegazione": "breve spiegazione in italiano", "note_cliniche": "eventuali osservazioni utili", "campioni_usati": 5}`
       }];
 
+    // ── Modalità 3: assistente pasto ────────────────────────────────────────
+    } else if (body.analysisType === 'meal-assistant') {
+      const { glicemiaAttuale, carbo, doseIpotizzata, config } = body.data;
+
+      const doseCarbo = carbo / config.carbRatio;
+      const doseCorrezione = config.isf ? (glicemiaAttuale - config.targetGlucose) / config.isf : 0;
+      const doseSuggerita = Math.max(0, doseCarbo + doseCorrezione);
+
+      messages = [{
+        role: 'user',
+        content: `Sei un assistente diabetologo che parla in italiano semplice e diretto. 
+        
+Il paziente sta per mangiare e ha questi dati:
+- Glicemia attuale: ${glicemiaAttuale} mg/dL (target: ${config.targetGlucose} mg/dL)
+- Carboidrati del pasto: ${carbo}g
+- Dose minima prescritta dal medico: ${config.rapidaBase}U di insulina rapida
+- Dose che sta pensando di fare: ${doseIpotizzata}U
+- Rapporto insulina/carbo: 1U ogni ${config.carbRatio}g
+- ISF: 1U abbassa la glicemia di ${config.isf} mg/dL
+
+Calcolo matematico:
+- Per i carbo: ${carbo}g ÷ ${config.carbRatio}g/U = ${doseCarbo.toFixed(1)}U
+- Correzione glicemica: (${glicemiaAttuale} - ${config.targetGlucose}) ÷ ${config.isf} = ${doseCorrezione.toFixed(1)}U
+- Dose totale suggerita: ${doseSuggerita.toFixed(1)}U (arrotondata: ${Math.round(doseSuggerita * 2) / 2}U)
+
+Valuta se la dose ipotizzata di ${doseIpotizzata}U è appropriata. Tieni conto che la dose minima prescritta dal medico è ${config.rapidaBase}U.
+
+Rispondi SOLO con JSON valido senza markdown:
+{"dose_consigliata": ${Math.round(doseSuggerita * 2) / 2}, "valutazione": "giusta|leggermente_bassa|troppo_bassa|leggermente_alta|troppo_alta", "messaggio": "messaggio breve e diretto in italiano (max 2 righe)", "dettaglio": "spiegazione del calcolo in italiano semplice"}`
+      }];
+
     } else {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Parametri mancanti: imageBase64 o analysisType richiesto' }) };
     }

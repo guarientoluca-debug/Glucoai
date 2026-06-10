@@ -197,10 +197,21 @@
           </select>
         </div>
       </div>
-      <!-- Calcolatore insulina -->
-      <div style="font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">💉 Correzione glicemica (opzionale)</div>
-      <input type="number" id="carb-current-glucose" placeholder="Glicemia attuale (mg/dL)" oninput="calcInsulinDose()"/>
+      <!-- Assistente pasto AI -->
+      <div style="font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;margin-top:4px">🩺 Assistente pasto</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div>
+          <div style="font-size:10px;font-weight:700;color:#ef4444;margin-bottom:3px">📊 Glicemia attuale</div>
+          <input type="number" id="carb-current-glucose" placeholder="mg/dL" oninput="calcInsulinDose()" style="margin-bottom:0"/>
+        </div>
+        <div>
+          <div style="font-size:10px;font-weight:700;color:#3b82f6;margin-bottom:3px">⚡ Dose che pensi di fare</div>
+          <input type="number" id="carb-planned-dose" placeholder="Unità" style="margin-bottom:0"/>
+        </div>
+      </div>
       <div id="insulin-calc-result"></div>
+      <button class="btn" onclick="askMealAssistant()" style="width:100%;background:#0ea5e9;color:#fff;margin-bottom:8px">🤖 Chiedi all'AI</button>
+      <div id="meal-assistant-result"></div>
       <input type="text" id="carb-note" placeholder="Nota (es. pizza margherita)…"/>
       <button class="btn" style="width:100%;background:#f59e0b;color:#fff" onclick="addMeal()">Salva pasto</button>
     </div>
@@ -335,6 +346,92 @@ function saveInsulinConfig() {
   msg.style.color = '#16a34a';
   setTimeout(() => { msg.textContent = ''; }, 3000);
   calcInsulinDose();
+}
+
+async function askMealAssistant() {
+  const carbs = parseFloat(document.getElementById('carb-total')?.value) || 0;
+  const glicemia = parseFloat(document.getElementById('carb-current-glucose')?.value) || 0;
+  const doseIpotizzata = parseFloat(document.getElementById('carb-planned-dose')?.value) || 0;
+  const resultEl = document.getElementById('meal-assistant-result');
+
+  if (!carbs) { resultEl.innerHTML = '<div style="font-size:12px;color:#f59e0b;padding:8px">⚠️ Inserisci prima i grammi di carboidrati</div>'; return; }
+  if (!insulinConfig.carbRatio) { resultEl.innerHTML = '<div style="font-size:12px;color:#f59e0b;padding:8px">⚠️ Configura prima il rapporto insulina/carbo in fondo alla pagina</div>'; return; }
+  if (!glicemia) { resultEl.innerHTML = '<div style="font-size:12px;color:#f59e0b;padding:8px">⚠️ Inserisci la glicemia attuale</div>'; return; }
+  if (!doseIpotizzata) { resultEl.innerHTML = '<div style="font-size:12px;color:#f59e0b;padding:8px">⚠️ Inserisci la dose che pensi di fare</div>'; return; }
+
+  resultEl.innerHTML = '<div class="ai-loading">🤖 Sto calcolando la dose ottimale…</div>';
+
+  try {
+    const resp = await fetch('/.netlify/functions/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        analysisType: 'meal-assistant',
+        data: {
+          glicemiaAttuale: glicemia,
+          carbo: carbs,
+          doseIpotizzata,
+          config: insulinConfig
+        }
+      })
+    });
+
+    const parsed = await resp.json();
+    if (!parsed.dose_consigliata) throw new Error(parsed.error || 'Risposta non valida');
+
+    const valColors = {
+      giusta: '#22c55e',
+      leggermente_bassa: '#f59e0b',
+      troppo_bassa: '#ef4444',
+      leggermente_alta: '#f59e0b',
+      troppo_alta: '#ef4444'
+    };
+    const valEmoji = {
+      giusta: '✅',
+      leggermente_bassa: '⚠️',
+      troppo_bassa: '❌',
+      leggermente_alta: '⚠️',
+      troppo_alta: '❌'
+    };
+    const valLabel = {
+      giusta: 'Dose giusta',
+      leggermente_bassa: 'Leggermente bassa',
+      troppo_bassa: 'Troppo bassa',
+      leggermente_alta: 'Leggermente alta',
+      troppo_alta: 'Troppo alta'
+    };
+
+    const col = valColors[parsed.valutazione] || '#64748b';
+    const emoji = valEmoji[parsed.valutazione] || '💬';
+    const label = valLabel[parsed.valutazione] || parsed.valutazione;
+    const bgCol = parsed.valutazione === 'giusta' ? '#f0fdf4' : parsed.valutazione.includes('alta') ? '#fff7ed' : '#fef2f2';
+    const borderCol = parsed.valutazione === 'giusta' ? '#bbf7d0' : parsed.valutazione.includes('alta') ? '#fed7aa' : '#fecaca';
+
+    resultEl.innerHTML = `
+    <div style="background:${bgCol};border:2px solid ${borderCol};border-radius:13px;padding:13px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div style="flex:1">
+          <div style="font-size:11px;font-weight:700;color:${col};text-transform:uppercase;letter-spacing:1px">${emoji} ${label}</div>
+          <div style="font-size:13px;font-weight:600;color:#1e293b;margin-top:3px">${parsed.messaggio}</div>
+        </div>
+        <div style="text-align:center;background:#fff;border-radius:10px;padding:8px 12px;min-width:70px">
+          <div style="font-size:10px;color:#94a3b8;font-weight:700">CONSIGLIATA</div>
+          <div style="font-size:24px;font-weight:800;color:${col}">${parsed.dose_consigliata}U</div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:#64748b;background:rgba(255,255,255,0.6);border-radius:8px;padding:8px">
+        📐 ${parsed.dettaglio}
+      </div>
+      ${parsed.dose_consigliata !== doseIpotizzata ? `
+      <button class="btn" onclick="document.getElementById('carb-planned-dose').value='${parsed.dose_consigliata}';document.getElementById('meal-assistant-result').querySelector('.apply-btn').style.display='none'" 
+        style="width:100%;background:${col};color:#fff;font-size:12px;margin-top:8px" class="apply-btn">
+        Usa ${parsed.dose_consigliata}U
+      </button>` : ''}
+    </div>`;
+
+  } catch(err) {
+    resultEl.innerHTML = `<div class="ai-error">❌ ${err.message}</div>`;
+  }
 }
 
 async function calcRatioWithAI() {
