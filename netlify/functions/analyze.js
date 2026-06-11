@@ -183,7 +183,7 @@ Rispondi SOLO con JSON valido senza markdown:
     // ── Chiamata API Anthropic ───────────────────────────────────────────────
     const payload = JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1000,
+      max_tokens: body.analysisType === 'pattern-analysis' ? 2000 : 1000,
       messages
     });
 
