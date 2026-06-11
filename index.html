@@ -338,7 +338,7 @@ let insulin   = JSON.parse(localStorage.getItem('dt-insulin')   || '[]');
 let sensors   = JSON.parse(localStorage.getItem('dt-sensors')   || '[]');
 let meals     = JSON.parse(localStorage.getItem('dt-meals')     || '[]');
 let libreData = JSON.parse(localStorage.getItem('dt-libre')     || '[]');
-let insulinConfig = JSON.parse(localStorage.getItem('dt-ins-config') || '{"dosePerPasto":{"colazione":0,"pranzo":0,"cena":0,"dormire":0},"carbRatio":10,"targetGlucose":120,"isf":50}');
+let insulinConfig = JSON.parse(localStorage.getItem('dt-ins-config') || '{"dosePerPasto":{"colazione":0,"pranzo":0,"cena":0,"dormire":0},"carbRatio":10,"carbRatioPerPasto":{},"targetGlucose":120,"isf":50}');
 let currentSection = 'glicemia';
 let insulinType = 'rapida';
 let availDays = [], dayIdx = 0;
@@ -692,15 +692,20 @@ function calcInsulinDose() {
 
   if (!carbs || !insulinConfig.carbRatio) { el.innerHTML = ''; return; }
 
-  const doseCarbo = carbs / insulinConfig.carbRatio;
+  const timing = document.getElementById('carb-timing')?.value || 'pranzo';
+
+  // Usa rapporto specifico per il pasto se disponibile (apprendimento adattivo)
+  const carbRatio = insulinConfig.carbRatioPerPasto?.[timing] || insulinConfig.carbRatio;
+  const isAdaptive = !!(insulinConfig.carbRatioPerPasto?.[timing]);
+
+  const doseCarbo = carbs / carbRatio;
   let doseCorrezione = 0;
   if (currentGlucose && insulinConfig.isf) {
     doseCorrezione = (currentGlucose - insulinConfig.targetGlucose) / insulinConfig.isf;
   }
   const doseTotal = Math.max(0, doseCarbo + doseCorrezione);
-  const doseTotalRounded = Math.round(doseTotal * 2) / 2; // arrotonda a 0.5U
+  const doseTotalRounded = Math.round(doseTotal * 2) / 2;
 
-  const timing = document.getElementById('carb-timing')?.value || 'pranzo';
   const rapidaBase = insulinConfig.dosePerPasto?.[timing] || 0;
   const delta = rapidaBase ? doseTotalRounded - rapidaBase : null;
   const deltaClass = delta === null ? '' : delta > 0 ? 'ins-delta-pos' : delta < 0 ? 'ins-delta-neg' : 'ins-delta-ok';
@@ -717,7 +722,7 @@ function calcInsulinDose() {
 
   el.innerHTML = `
   <div class="ins-calc">
-    <div class="ins-calc-title">💉 Dose insulina rapida suggerita</div>
+    <div class="ins-calc-title">💉 Dose insulina rapida suggerita${isAdaptive ? ' <span style="font-size:9px;background:#8b5cf6;color:#fff;border-radius:4px;padding:2px 5px">🧠 adattivo</span>' : ''}</div>
     <div style="display:flex;align-items:flex-end;gap:10px;margin-bottom:6px">
       <div>
         <div class="ins-dose-big" style="color:#3b82f6">${doseTotalRounded} <span style="font-size:14px;font-weight:500;color:#94a3b8">U ⚡</span></div>
@@ -731,7 +736,7 @@ function calcInsulinDose() {
       </div>` : ''}
     </div>
     ${corrText}
-    <div style="font-size:10px;color:#94a3b8;margin-top:6px">📊 ${carbs}g ÷ ${insulinConfig.carbRatio}g/U${currentGlucose ? ` · glicemia ${currentGlucose} mg/dL (target ${insulinConfig.targetGlucose})` : ''}</div>
+    <div style="font-size:10px;color:#94a3b8;margin-top:6px">📊 ${carbs}g ÷ ${carbRatio}g/U${currentGlucose ? ` · glicemia ${currentGlucose} mg/dL (target ${insulinConfig.targetGlucose})` : ''}${isAdaptive ? ' · rapporto personalizzato' : ''}</div>
   </div>`;
 }
 
@@ -1831,6 +1836,44 @@ function importLibreCSV(event) {
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+// Carica config adattiva da GitHub se disponibile
+async function loadAdaptiveConfig() {
+  const REPO = 'guarientoluca-debug/diabete-tracker';
+  try {
+    const res = await fetch(`https://raw.githubusercontent.com/${REPO}/main/user-data.json?t=${Date.now()}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.insulinConfig?.adaptiveUpdate) return;
+
+    const remoteUpdate = new Date(data.insulinConfig.adaptiveUpdate.updatedAt).getTime();
+    const localUpdate = insulinConfig.adaptiveUpdate ? new Date(insulinConfig.adaptiveUpdate.updatedAt).getTime() : 0;
+
+    if (remoteUpdate > localUpdate) {
+      // Aggiorna solo i campi adattivi, mantieni le dosi prescritte locali
+      insulinConfig.carbRatioPerPasto = data.insulinConfig.carbRatioPerPasto;
+      insulinConfig.carbRatio = data.insulinConfig.carbRatio;
+      insulinConfig.adaptiveUpdate = data.insulinConfig.adaptiveUpdate;
+      localStorage.setItem('dt-ins-config', JSON.stringify(insulinConfig));
+
+      // Aggiorna il campo rapporto nella UI se visibile
+      const ratioEl = document.getElementById('cfg-ratio');
+      if (ratioEl) ratioEl.value = insulinConfig.carbRatio;
+
+      console.log('🧠 Rapporti adattivi aggiornati da GitHub:', insulinConfig.carbRatioPerPasto);
+
+      // Mostra notifica
+      const msg = document.getElementById('cfg-msg');
+      if (msg) {
+        msg.textContent = `🧠 Rapporti aggiornati automaticamente (${data.insulinConfig.adaptiveUpdate.campioni} pasti analizzati)`;
+        msg.style.color = '#7c3aed';
+        setTimeout(() => { if(msg) msg.textContent = ''; }, 5000);
+      }
+    }
+  } catch(e) {
+    console.log('Config adattiva non disponibile:', e.message);
+  }
+}
+
 if (apiKey) {
   document.getElementById('api-key-msg').textContent = '🔑 Chiave API configurata ✓';
   document.getElementById('api-key-msg').style.color = '#94a3b8';
@@ -1844,6 +1887,8 @@ if (insulinConfig.carbRatio)     document.getElementById('cfg-ratio').value    =
 if (insulinConfig.targetGlucose) document.getElementById('cfg-target').value   = insulinConfig.targetGlucose;
 if (insulinConfig.isf)           document.getElementById('cfg-isf').value      = insulinConfig.isf;
 showSection('glicemia');
+// Carica config adattiva in background
+setTimeout(loadAdaptiveConfig, 2000);
 </script>
 </body>
 </html>
