@@ -1268,7 +1268,9 @@ async function analyzePatterns() {
       })
     });
 
-    const parsed = await resp.json();
+    const text = await resp.text();
+    const clean = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+    const parsed = JSON.parse(clean);
     if (!parsed.sintesi) throw new Error(parsed.error || 'Risposta non valida');
 
     const sevColors = { positivo: '#22c55e', attenzione: '#f59e0b', critico: '#ef4444' };
