@@ -1241,9 +1241,9 @@ async function analyzePatterns() {
     const pre = sorted.filter(r => new Date(r.date).getTime() <= mt && mt - new Date(r.date).getTime() <= 60*60000).at(-1) || null;
     const dose = [...insulin].filter(i => i.type==='rapida' && Math.abs(new Date(i.date).getTime()-mt) <= 30*60000)
       .sort((a,b) => Math.abs(new Date(a.date).getTime()-mt) - Math.abs(new Date(b.date).getTime()-mt))[0] || null;
-    const post = sorted.filter(r => r.timing==='post-pasto' && new Date(r.date).getTime()>mt && new Date(r.date).getTime()-mt<=3*3600000)
-      .sort((a,b) => new Date(a.date)-new Date(b.date))[0] || null;
-    return { timing: meal.timing, carbs: meal.carbs, dose: dose?.units, pre: pre?.value, post: post?.value, date: meal.date.slice(0,10) };
+    const postData = getPostGlucose(mt);
+    const post = postData?.value || null;
+    return { timing: meal.timing, carbs: meal.carbs, dose: dose?.units, pre: pre?.value, post, postSource: postData?.source, date: meal.date.slice(0,10) };
   }).filter(e => e.carbs > 0);
 
   if (events.length < 3) {
@@ -1314,6 +1314,38 @@ async function analyzePatterns() {
   }
 }
 
+// ── Helper: cerca glicemia post-pasto (Libre prima, poi glucometro) ──────────
+function getPostGlucose(mealTime) {
+  const TARGET_MINUTES = 120; // cerca intorno alle 2h post-pasto
+  const WINDOW_MS = 90 * 60000; // finestra ±90 min attorno alle 2h
+
+  // 1. Cerca nel Libre: lettura più vicina a 2h dopo il pasto
+  const librePost = libreData
+    .filter(r => {
+      const diff = new Date(r.date).getTime() - mealTime;
+      return diff > 0 && diff <= (TARGET_MINUTES + 90) * 60000 && diff >= (TARGET_MINUTES - 90) * 60000;
+    })
+    .sort((a,b) => {
+      const da = Math.abs(new Date(a.date).getTime() - mealTime - TARGET_MINUTES * 60000);
+      const db = Math.abs(new Date(b.date).getTime() - mealTime - TARGET_MINUTES * 60000);
+      return da - db;
+    })[0] || null;
+
+  if (librePost) return { value: librePost.value, source: 'libre', date: librePost.date };
+
+  // 2. Fallback: glucometro con timing post-pasto entro 3h
+  const sortedReadings = [...readings].sort((a,b) => new Date(a.date) - new Date(b.date));
+  const glucPost = sortedReadings.filter(r =>
+    r.timing === 'post-pasto' &&
+    new Date(r.date).getTime() > mealTime &&
+    new Date(r.date).getTime() - mealTime <= 3 * 3600000
+  ).sort((a,b) => new Date(a.date) - new Date(b.date))[0] || null;
+
+  if (glucPost) return { value: glucPost.value, source: 'glucometro', date: glucPost.date };
+
+  return null;
+}
+
 // ── Render CORRELAZIONE ───────────────────────────────────────────────────────
 function renderCorrelation() {
   const el = document.getElementById('corr-content');
@@ -1334,12 +1366,9 @@ function renderCorrelation() {
       .filter(i => i.type === 'rapida' && Math.abs(new Date(i.date).getTime() - mt) <= 30 * 60000)
       .sort((a,b) => Math.abs(new Date(a.date).getTime()-mt) - Math.abs(new Date(b.date).getTime()-mt))[0] || null;
 
-    // Glicemia post-pasto (entro 3h dopo)
-    const post = sorted.filter(r =>
-      r.timing === 'post-pasto' &&
-      new Date(r.date).getTime() > mt &&
-      new Date(r.date).getTime() - mt <= 3 * 3600000
-    ).sort((a,b) => new Date(a.date) - new Date(b.date))[0] || null;
+    // Glicemia post-pasto: prima Libre ~2h dopo, poi glucometro
+    const postData = getPostGlucose(mt);
+    const post = postData ? { value: postData.value, source: postData.source } : null;
 
     const delta = (pre && post) ? post.value - pre.value : null;
     const deltaPost = post ? post.value - (insulinConfig.targetGlucose || 120) : null;
@@ -1435,7 +1464,7 @@ function renderCorrelation() {
           <div style="font-size:16px;font-weight:800;color:${pre?getZone(pre.value).color:'#cbd5e1'}">${pre?pre.value:'—'}</div>
         </div>
         <div style="background:${post?getZone(post.value).bg:'#f8fafc'};border-radius:9px;padding:7px;text-align:center">
-          <div style="font-size:9px;font-weight:700;color:#94a3b8">📊 POST</div>
+          <div style="font-size:9px;font-weight:700;color:#94a3b8">${post?.source==='libre'?'📡':'📊'} POST</div>
           <div style="font-size:16px;font-weight:800;color:${post?postColor:'#cbd5e1'}">${post?post.value:'—'}</div>
         </div>
       </div>
