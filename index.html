@@ -367,6 +367,36 @@ function saveAll() {
   localStorage.setItem('dt-meals',    JSON.stringify(meals));
   localStorage.setItem('dt-libre',    JSON.stringify(libreData));
   localStorage.setItem('dt-ins-config', JSON.stringify(insulinConfig));
+  scheduleDailySync();
+}
+
+let syncScheduled = false;
+function scheduleDailySync() {
+  if (syncScheduled) return;
+  syncScheduled = true;
+  // Sincronizza con GitHub dopo 5 secondi (raggruppa modifiche ravvicinate)
+  setTimeout(syncToGitHub, 5000);
+}
+
+async function syncToGitHub() {
+  syncScheduled = false;
+  const lastSync = localStorage.getItem('dt-last-sync');
+  const now = Date.now();
+  // Sincronizza max una volta ogni 30 minuti
+  if (lastSync && now - parseInt(lastSync) < 30 * 60 * 1000) return;
+  try {
+    const resp = await fetch('/.netlify/functions/save-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ readings, insulin, sensors, meals, libreData, insulinConfig })
+    });
+    if (resp.ok) {
+      localStorage.setItem('dt-last-sync', now.toString());
+      console.log('✅ Dati sincronizzati su GitHub');
+    }
+  } catch(err) {
+    console.log('⚠️ Sync GitHub non riuscito:', err.message);
+  }
 }
 
 function saveInsulinConfig() {
