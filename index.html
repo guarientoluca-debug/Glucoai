@@ -1182,10 +1182,8 @@ function renderCarb() {
   const avgCarb=Math.round(meals.reduce((a,b)=>a+b.carbs,0)/meals.length);
   const withGlucose=meals.map(m=>{
     const mealTime=new Date(m.date).getTime();
-    const postGlucose=readings.filter(r=>r.timing==='post-pasto'&&
-      new Date(r.date).getTime()>mealTime&&
-      new Date(r.date).getTime()-mealTime<=3*3600000
-    ).sort((a,b)=>new Date(a.date)-new Date(b.date))[0]||null;
+    const postData = getPostGlucose(mealTime);
+    const postGlucose = postData ? { value: postData.value, source: postData.source } : null;
     return{...m,postGlucose};
   });
   el.innerHTML=`
@@ -1218,7 +1216,7 @@ function renderCarb() {
       </div>
       <div style="font-size:16px;color:#e2e8f0">→</div>
       <div style="background:${m.postGlucose?getZone(m.postGlucose.value).bg:'#f8fafc'};border-radius:9px;padding:7px 10px;text-align:center;flex:1">
-        <div style="font-size:9px;font-weight:700;color:#94a3b8">POST-PASTO</div>
+        <div style="font-size:9px;font-weight:700;color:#94a3b8">${m.postGlucose?.source==='libre'?'📡':'📊'} POST-PASTO</div>
         ${m.postGlucose
           ?`<div style="font-size:18px;font-weight:800;color:${getZone(m.postGlucose.value).color}">${m.postGlucose.value} <span style="font-size:10px">mg/dL</span></div>`
           :`<div style="font-size:11px;color:#cbd5e1">non rilevata</div>`}
