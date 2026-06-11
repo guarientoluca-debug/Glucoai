@@ -135,6 +135,47 @@ Rispondi SOLO con JSON valido senza markdown:
 {"dose_consigliata": ${doseSuggerita}, "valutazione": "giusta|leggermente_bassa|troppo_bassa|leggermente_alta|troppo_alta", "messaggio": "messaggio breve e diretto in italiano (max 2 righe)", "dettaglio": "spiegazione del calcolo in italiano semplice"}`
       }];
 
+    // ── Modalità 5: analisi pattern glicemici ───────────────────────────────
+    } else if (body.analysisType === 'pattern-analysis') {
+      const { events, config, stats } = body.data;
+
+      const datiTesto = events.map(e =>
+        `- ${e.date} ${e.timing}: ${e.carbs}g carbo${e.dose ? ` → ${e.dose}U insulina` : ' (no insulina registrata)'}${e.pre ? ` | pre: ${e.pre} mg/dL` : ''}${e.post ? ` | post: ${e.post} mg/dL` : ''}`
+      ).join('\n');
+
+      messages = [{
+        role: 'user',
+        content: `Sei un diabetologo esperto. Analizza i pattern glicemici di questo paziente diabetico.
+
+CONFIGURAZIONE:
+- Rapporto insulina/carbo: ${config.carbRatio || '?'}g per 1U
+- Target glicemia: ${config.targetGlucose || 120} mg/dL
+- ISF: ${config.isf || 50} mg/dL per U
+- Dosi prescritte: colazione ${config.dosePerPasto?.colazione || '?'}U, pranzo ${config.dosePerPasto?.pranzo || '?'}U, cena ${config.dosePerPasto?.cena || '?'}U
+
+DATI PASTI (${events.length} eventi):
+${datiTesto}
+
+Analizza i pattern e identifica:
+1. Per ogni tipo di pasto (colazione/pranzo/cena/spuntino) valuta se le dosi funzionano
+2. Identifica pattern problematici (es. ipoglicemie serali ricorrenti)
+3. Suggerisci aggiustamenti specifici al rapporto insulina/carbo se necessario
+
+Rispondi SOLO con JSON valido senza markdown:
+{
+  "sintesi": "valutazione generale in 2-3 frasi",
+  "pattern_per_pasto": [
+    {
+      "pasto": "colazione|pranzo|cena|spuntino",
+      "severita": "positivo|attenzione|critico",
+      "osservazione": "cosa noti",
+      "suggerimento": "cosa fare (opzionale)"
+    }
+  ],
+  "raccomandazione_rapporto": "suggerimento sul rapporto insulina/carbo (opzionale)"
+}`
+      }];
+
     } else {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Parametri mancanti: imageBase64 o analysisType richiesto' }) };
     }
