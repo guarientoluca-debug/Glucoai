@@ -141,6 +141,7 @@ Usa un tono caldo, incoraggiante e pratico. Non sostituisce il parere medico —
 
   console.log('🤖 Chiamo Claude per analisi...');
   const reportHtml = await callClaude(prompt);
+  const cleanReportHtml = reportHtml.replace(/```html\s*/gi, '').replace(/```\s*/gi, '').trim();
 
   // Email HTML completa
   const emailHtml = `
@@ -184,7 +185,7 @@ Usa un tono caldo, incoraggiante e pratico. Non sostituisce il parere medico —
       <div class="tir-bar"><div class="tir-fill"></div></div>
       <div style="font-size:11px;color:#64748b">${tir}% • obiettivo ADA: ≥70%</div>
     </div>
-    ${reportHtml}
+    ${cleanReportHtml}
   </div>
   <div class="footer">
     📱 Generato automaticamente da Diabete Tracker · Non sostituisce il parere medico<br/>
