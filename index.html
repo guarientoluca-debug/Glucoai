@@ -913,6 +913,7 @@ function renderAiResult(note) {
     ${note?`<div style="font-size:11px;color:#64748b;margin-top:6px">💬 ${note}</div>`:''}
   </div>`;
   document.getElementById('carb-total').value = totale;
+  calcInsulinDose();
 }
 
 async function resizeImage(file, maxWidth=800) {
