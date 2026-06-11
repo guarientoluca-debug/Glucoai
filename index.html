@@ -1230,50 +1230,136 @@ function renderCarb() {
 
 // ── Render CORRELAZIONE ───────────────────────────────────────────────────────
 function renderCorrelation() {
-  const el=document.getElementById('corr-content');
-  const sorted=[...readings].sort((a,b)=>new Date(a.date)-new Date(b.date));
-  const pairs=insulin.map(dose=>{
-    const dt=new Date(dose.date).getTime(),win=dose.type==='rapida'?3*3600000:12*3600000;
-    const pre=sorted.filter(r=>new Date(r.date).getTime()<=dt&&dt-new Date(r.date).getTime()<=2*3600000).at(-1)||null;
-    const post=sorted.filter(r=>new Date(r.date).getTime()>dt&&new Date(r.date).getTime()-dt<=win).at(0)||null;
-    return{dose,pre,post,delta:(pre&&post)?post.value-pre.value:null};
-  }).filter(c=>c.pre||c.post);
-  if(!pairs.length){
-    el.innerHTML='<div class="empty"><div class="empty-icon">🔗</div><div style="font-weight:700;color:#64748b">Nessuna correlazione ancora</div></div>';
+  const el = document.getElementById('corr-content');
+  const sorted = [...readings].sort((a,b) => new Date(a.date) - new Date(b.date));
+
+  // Costruisci eventi completi: per ogni pasto cerca insulina + glicemia pre/post
+  const events = meals.map(meal => {
+    const mt = new Date(meal.date).getTime();
+
+    // Glicemia pre-pasto (entro 1h prima)
+    const pre = sorted.filter(r =>
+      new Date(r.date).getTime() <= mt &&
+      mt - new Date(r.date).getTime() <= 60 * 60000
+    ).at(-1) || null;
+
+    // Insulina rapida (entro 30 min prima o dopo)
+    const dose = [...insulin]
+      .filter(i => i.type === 'rapida' && Math.abs(new Date(i.date).getTime() - mt) <= 30 * 60000)
+      .sort((a,b) => Math.abs(new Date(a.date).getTime()-mt) - Math.abs(new Date(b.date).getTime()-mt))[0] || null;
+
+    // Glicemia post-pasto (entro 3h dopo)
+    const post = sorted.filter(r =>
+      r.timing === 'post-pasto' &&
+      new Date(r.date).getTime() > mt &&
+      new Date(r.date).getTime() - mt <= 3 * 3600000
+    ).sort((a,b) => new Date(a.date) - new Date(b.date))[0] || null;
+
+    const delta = (pre && post) ? post.value - pre.value : null;
+    const deltaPost = post ? post.value - (insulinConfig.targetGlucose || 120) : null;
+
+    return { meal, pre, dose, post, delta, deltaPost };
+  }).sort((a,b) => new Date(b.meal.date) - new Date(a.meal.date));
+
+  if (!events.length) {
+    el.innerHTML = '<div class="empty"><div class="empty-icon">🔗</div><div style="font-weight:700;color:#64748b">Nessun pasto registrato</div></div>';
     return;
   }
-  const withD=pairs.filter(p=>p.delta!==null);
-  const avgD=withD.length?Math.round(withD.reduce((s,p)=>s+p.delta,0)/withD.length):null;
-  const effPct=withD.length?Math.round(withD.filter(p=>p.delta<0).length/withD.length*100):null;
-  el.innerHTML=`
-  ${withD.length?`<div class="stat-grid" style="margin-bottom:12px">
-    <div class="stat-box"><div class="stat-label">Variaz. media</div><div class="stat-val" style="color:${avgD<0?'#22c55e':avgD>0?'#ef4444':'#64748b'}">${avgD>0?'+':''}${avgD}</div><div class="stat-unit">mg/dL</div></div>
-    <div class="stat-box"><div class="stat-label">Dosi efficaci</div><div class="stat-val" style="color:${effPct>=70?'#22c55e':effPct>=40?'#f59e0b':'#ef4444'}">${effPct}%</div><div class="stat-unit">↓ glic.</div></div>
-  </div>`:''}
-  ${[...pairs].reverse().map(({dose,pre,post,delta})=>{
-    const t=ITYPES[dose.type],dc=delta===null?'#94a3b8':delta<0?'#22c55e':delta>0?'#ef4444':'#64748b';
-    const eff=delta===null?'':delta<-20?'✅ Molto efficace':delta<0?'✅ Ridotta':delta<20?'⚠️ Minima':'❌ Aumentata';
-    const effC=delta===null?'':delta<0?'#16a34a':delta<20?'#d97706':'#dc2626';
-    return `<div class="corr-card">
-      <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px">
-        <div style="background:${t.bg};border-radius:7px;padding:3px 9px;font-size:11px;font-weight:700;color:${t.color}">${t.emoji} ${t.label} · ${dose.units} U</div>
-        <div style="font-size:10px;color:#94a3b8;margin-left:auto">${fmt(dose.date)}</div>
+
+  // Statistiche aggregate
+  const withFull = events.filter(e => e.pre && e.post && e.dose);
+  const withPost = events.filter(e => e.post);
+  const avgPost = withPost.length ? Math.round(withPost.reduce((s,e) => s + e.post.value, 0) / withPost.length) : null;
+  const inTarget = withPost.filter(e => e.post.value >= 70 && e.post.value <= 180).length;
+  const tirPost = withPost.length ? Math.round(inTarget / withPost.length * 100) : null;
+
+  // Pasto più problematico
+  const byTiming = {};
+  withPost.forEach(e => {
+    if (!byTiming[e.meal.timing]) byTiming[e.meal.timing] = [];
+    byTiming[e.meal.timing].push(e.post.value);
+  });
+  const timingAvgs = Object.entries(byTiming).map(([t,vals]) => ({
+    timing: t,
+    avg: Math.round(vals.reduce((a,b)=>a+b,0)/vals.length)
+  })).sort((a,b) => b.avg - a.avg);
+
+  el.innerHTML = `
+  <!-- Statistiche -->
+  ${withPost.length >= 2 ? `
+  <div class="stat-grid" style="margin-bottom:12px">
+    <div class="stat-box">
+      <div class="stat-label">Media post-pasto</div>
+      <div class="stat-val" style="color:${avgPost<=180?'#22c55e':'#ef4444'}">${avgPost}</div>
+      <div class="stat-unit">mg/dL</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">In target post</div>
+      <div class="stat-val" style="color:${tirPost>=70?'#22c55e':tirPost>=50?'#f59e0b':'#ef4444'}">${tirPost}%</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-label">Pasti tracciati</div>
+      <div class="stat-val" style="color:#64748b">${withPost.length}</div>
+    </div>
+  </div>
+  ${timingAvgs.length ? `
+  <div class="card" style="margin-bottom:12px;padding:12px">
+    <div class="card-title">Media glicemia post per pasto</div>
+    ${timingAvgs.map(t => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div style="font-size:12px;font-weight:700;color:#1e293b;text-transform:capitalize;min-width:70px">${
+        t.timing==='colazione'?'🌅':t.timing==='pranzo'?'☀️':t.timing==='cena'?'🌆':'🍎'
+      } ${t.timing}</div>
+      <div style="flex:1;background:#f1f5f9;border-radius:6px;height:14px;overflow:hidden">
+        <div style="width:${Math.min(100,t.avg/300*100)}%;background:${getZone(t.avg).color};height:14px;border-radius:6px"></div>
       </div>
-      <div class="corr-row">
-        <div class="corr-box" style="background:${pre?getZone(pre.value).bg:'#f8fafc'}">
-          <div style="font-size:9px;font-weight:700;color:#94a3b8;margin-bottom:2px">PRE</div>
-          ${pre?`<div class="corr-val" style="color:${getZone(pre.value).color}">${pre.value}</div><div class="corr-sub">${fmtTime(pre.date)}</div>`:'<div style="font-size:12px;color:#cbd5e1">—</div>'}
+      <div style="font-size:13px;font-weight:800;color:${getZone(t.avg).color};min-width:50px;text-align:right">${t.avg} mg/dL</div>
+    </div>`).join('')}
+  </div>` : ''}` : ''}
+
+  <!-- Lista eventi -->
+  <div style="font-size:10px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Storico pasti completo</div>
+  ${events.map(({meal, pre, dose, post, delta, deltaPost}) => {
+    const timingEmoji = meal.timing==='colazione'?'🌅':meal.timing==='pranzo'?'☀️':meal.timing==='cena'?'🌆':'🍎';
+    const postOk = post ? post.value >= 70 && post.value <= 180 : null;
+    const postColor = post ? getZone(post.value).color : '#94a3b8';
+    const evalEmoji = postOk === null ? '' : postOk ? '✅' : post.value > 180 ? '⚠️' : '🔴';
+    const evalText = postOk === null ? 'glicemia post non rilevata' : postOk ? 'Glicemia in target' : post.value > 180 ? 'Iperglicemia post-pasto' : 'Ipoglicemia post-pasto';
+
+    return `
+    <div style="background:#fff;border-radius:14px;padding:13px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.06)">
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="font-weight:700;font-size:14px">${timingEmoji} ${meal.timing.charAt(0).toUpperCase()+meal.timing.slice(1)}</div>
+        <div style="font-size:10px;color:#94a3b8">${fmt(meal.date)}</div>
+      </div>
+
+      <!-- Riga carbo + insulina + glicemie -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px">
+        <div style="background:#fff7ed;border-radius:9px;padding:7px;text-align:center">
+          <div style="font-size:9px;font-weight:700;color:#f59e0b">🌾 CARBO</div>
+          <div style="font-size:16px;font-weight:800;color:#d97706">${meal.carbs}g</div>
         </div>
-        <div class="arrow-col">
-          <div style="font-size:15px">→</div>
-          ${delta!==null?`<div style="font-size:12px;font-weight:800;color:${dc}">${delta>0?'+':''}${delta}</div>`:''}
+        <div style="background:${dose?'#eff6ff':'#f8fafc'};border-radius:9px;padding:7px;text-align:center">
+          <div style="font-size:9px;font-weight:700;color:${dose?'#3b82f6':'#94a3b8'}">⚡ INSULINA</div>
+          <div style="font-size:16px;font-weight:800;color:${dose?'#1d4ed8':'#cbd5e1'}">${dose?dose.units+'U':'—'}</div>
         </div>
-        <div class="corr-box" style="background:${post?getZone(post.value).bg:'#f8fafc'}">
-          <div style="font-size:9px;font-weight:700;color:#94a3b8;margin-bottom:2px">POST</div>
-          ${post?`<div class="corr-val" style="color:${getZone(post.value).color}">${post.value}</div><div class="corr-sub">${fmtTime(post.date)}</div>`:'<div style="font-size:12px;color:#cbd5e1">—</div>'}
+        <div style="background:${pre?getZone(pre.value).bg:'#f8fafc'};border-radius:9px;padding:7px;text-align:center">
+          <div style="font-size:9px;font-weight:700;color:#94a3b8">📊 PRE</div>
+          <div style="font-size:16px;font-weight:800;color:${pre?getZone(pre.value).color:'#cbd5e1'}">${pre?pre.value:'—'}</div>
+        </div>
+        <div style="background:${post?getZone(post.value).bg:'#f8fafc'};border-radius:9px;padding:7px;text-align:center">
+          <div style="font-size:9px;font-weight:700;color:#94a3b8">📊 POST</div>
+          <div style="font-size:16px;font-weight:800;color:${post?postColor:'#cbd5e1'}">${post?post.value:'—'}</div>
         </div>
       </div>
-      ${eff?`<div style="margin-top:8px;text-align:center;font-size:11px;font-weight:600;color:${effC}">${eff}</div>`:''}
+
+      <!-- Valutazione -->
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="font-size:11px;font-weight:600;color:${postOk===null?'#94a3b8':postOk?'#16a34a':post?.value>180?'#d97706':'#ef4444'}">${evalEmoji} ${evalText}</div>
+        ${delta !== null ? `<div style="font-size:11px;font-weight:700;color:${delta<0?'#22c55e':delta>0?'#ef4444':'#64748b'}">Δ ${delta>0?'+':''}${delta} mg/dL</div>` : ''}
+      </div>
+      ${meal.foods&&meal.foods.length?`<div style="font-size:10px;color:#94a3b8;margin-top:5px">${meal.foods.map(f=>f.name+(f.grams?` ${f.grams}g`:'')).join(' · ')}</div>`:''}
     </div>`;
   }).join('')}`;
 }
