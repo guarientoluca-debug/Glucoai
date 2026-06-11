@@ -15,7 +15,7 @@ function callClaude(prompt) {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1500,
+      max_tokens: 2000,
       messages: [{ role: 'user', content: prompt }]
     });
     const options = {
@@ -137,7 +137,14 @@ Scrivi un report settimanale in HTML con:
 5. Se hai dati sufficienti sui pasti, valuta se il rapporto insulina/carbo sembra adeguato
 6. Chiudi con un messaggio motivazionale
 
-Usa un tono caldo, incoraggiante e pratico. Non sostituisce il parere medico — ricordalo brevemente. Rispondi SOLO con HTML (no markdown, no backtick).`;
+Scrivi un report settimanale usando SOLO tag HTML semplici (h2, p, ul, li, strong, em). NON usare CSS inline complesso, NON usare div con stili elaborati. Sii conciso ma completo:
+1. Titolo h2 con emoji e valutazione generale
+2. Paragrafo "Cosa sta funzionando" 
+3. Paragrafo "Aree di miglioramento" (se necessario)
+4. Se hai dati sui pasti, valuta brevemente il rapporto insulina/carbo
+5. Messaggio motivazionale finale
+
+Tono caldo e pratico. Aggiungi una riga: "⚕️ Questo report non sostituisce il parere medico." Rispondi SOLO con HTML senza backtick, senza tag html/body/head.`;
 
   console.log('🤖 Chiamo Claude per analisi...');
   const reportHtml = await callClaude(prompt);
