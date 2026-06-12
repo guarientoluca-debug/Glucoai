@@ -390,15 +390,16 @@ async function syncToGitHub() {
 
 function saveInsulinConfig() {
   insulinConfig = {
+    ...insulinConfig,
     dosePerPasto: {
       colazione: parseFloat(document.getElementById('cfg-dose-colazione').value) || 0,
       pranzo:    parseFloat(document.getElementById('cfg-dose-pranzo').value)    || 0,
       cena:      parseFloat(document.getElementById('cfg-dose-cena').value)      || 0,
       dormire:   parseFloat(document.getElementById('cfg-dose-dormire').value)   || 0,
     },
-    carbRatio:     parseFloat(document.getElementById('cfg-ratio').value)  || 10,
-    targetGlucose: parseFloat(document.getElementById('cfg-target').value) || 120,
-    isf:           parseFloat(document.getElementById('cfg-isf').value)    || 50,
+    carbRatio:     parseFloat(document.getElementById('cfg-ratio')?.value)  || insulinConfig.carbRatio  || 10,
+    targetGlucose: parseFloat(document.getElementById('cfg-target')?.value) || insulinConfig.targetGlucose || 120,
+    isf:           parseFloat(document.getElementById('cfg-isf')?.value)    || insulinConfig.isf    || 50,
   };
   localStorage.setItem('dt-ins-config', JSON.stringify(insulinConfig));
   const msg = document.getElementById('cfg-msg');
