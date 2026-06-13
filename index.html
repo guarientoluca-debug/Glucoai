@@ -549,48 +549,55 @@
       <div id="cfg-msg" style="font-size:11px;text-align:center;color:#94a3b8;margin-top:4px;min-height:14px"></div>
       <div id="cfg-ai-result"></div>
     </div>
+
+    <!-- Dati account -->
+    <div class="card" style="margin-top:12px">
+      <div class="card-title">👤 Il mio account</div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:6px">NOME</div>
+        <input type="text" id="user-nome" placeholder="Il tuo nome"/>
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:6px">EMAIL</div>
+        <input type="email" id="user-email" placeholder="Email"/>
+      </div>
+      <button class="btn" onclick="saveUserProfile()" style="width:100%;background:#3b82f6;color:#fff;font-size:13px;margin-bottom:14px">Salva profilo</button>
+
+      <div style="border-top:1px solid #f1f5f9;padding-top:14px;margin-bottom:12px">
+        <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:8px">🔑 CAMBIA PASSWORD</div>
+        <input type="password" id="user-new-password" placeholder="Nuova password (min 6 caratteri)"/>
+        <input type="password" id="user-confirm-password" placeholder="Conferma nuova password"/>
+      </div>
+      <button class="btn" onclick="changePassword()" style="width:100%;background:#6366f1;color:#fff;font-size:13px;margin-bottom:6px">Cambia password</button>
+      <div id="profile-msg" style="font-size:11px;text-align:center;min-height:16px;margin-bottom:10px"></div>
+
+      <div style="border-top:1px solid #f1f5f9;padding-top:12px">
+        <button onclick="logout()" style="width:100%;padding:12px;border:none;border-radius:11px;background:#fef2f2;color:#ef4444;font-weight:700;font-size:14px;cursor:pointer">🚪 Esci dall'account</button>
+      </div>
+    </div>
+
+    <div style="font-size:10px;color:#cbd5e1;text-align:center;margin-top:14px">Non sostituisce il parere medico</div>
   </div>
-
-  <!-- Dati account -->
-  <div class="card" style="margin-top:12px">
-    <div class="card-title">👤 Il mio account</div>
-    <div style="margin-bottom:10px">
-      <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:4px">NOME</div>
-      <input type="text" id="user-nome" placeholder="Il tuo nome" style="margin-bottom:0"/>
-    </div>
-    <div style="margin-bottom:10px">
-      <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:4px">EMAIL</div>
-      <input type="email" id="user-email" placeholder="Email" style="margin-bottom:0"/>
-    </div>
-    <button class="btn" onclick="saveUserProfile()" style="width:100%;background:#3b82f6;color:#fff;font-size:13px;margin-bottom:12px">Salva profilo</button>
-
-    <div style="border-top:1px solid #f1f5f9;padding-top:12px;margin-bottom:10px">
-      <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:8px">🔑 CAMBIA PASSWORD</div>
-      <input type="password" id="user-new-password" placeholder="Nuova password (min 6 caratteri)" style="margin-bottom:6px"/>
-      <input type="password" id="user-confirm-password" placeholder="Conferma nuova password" style="margin-bottom:0"/>
-    </div>
-    <button class="btn" onclick="changePassword()" style="width:100%;background:#6366f1;color:#fff;font-size:13px;margin-bottom:4px">Cambia password</button>
-    <div id="profile-msg" style="font-size:11px;text-align:center;min-height:16px;margin-bottom:8px"></div>
-
-    <div style="border-top:1px solid #f1f5f9;padding-top:12px">
-      <button onclick="logout()" style="width:100%;padding:12px;border:none;border-radius:11px;background:#fef2f2;color:#ef4444;font-weight:700;font-size:14px;cursor:pointer">🚪 Esci dall'account</button>
-    </div>
-  </div>
-
-  <div style="font-size:10px;color:#cbd5e1;text-align:center;margin-top:14px">Non sostituisce il parere medico</div>
-</div>
-</div>
 
 <script>
 // ── Supabase ──────────────────────────────────────────────────────────────────
 const SUPABASE_URL = 'https://zynytvhmlnvlvswuhtse.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_bhmy7olw7-7VxATfSW248g_siFu7lFO';
-const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,
+    storageKey: 'dt-auth-session',
+    storage: window.localStorage,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+});
 
 let currentUser = null;
 
 async function initAuth() {
-  const { data: { session } } = await sbClient.auth.getSession();
+  // Gestisce il callback OAuth dall'URL hash
+  const { data: { session }, error } = await sbClient.auth.getSession();
   if (session?.user) {
     currentUser = session.user;
     showApp();
@@ -599,10 +606,10 @@ async function initAuth() {
   }
 
   sbClient.auth.onAuthStateChange((event, session) => {
-    if (session?.user) {
+    if (event === 'SIGNED_IN' && session?.user) {
       currentUser = session.user;
       showApp();
-    } else {
+    } else if (event === 'SIGNED_OUT') {
       currentUser = null;
       showLoginScreen();
     }
@@ -653,7 +660,13 @@ async function registerWithEmail() {
 }
 
 async function loginWithGoogle() {
-  await sbClient.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
+  await sbClient.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: 'https://luminous-pegasus-e51837.netlify.app',
+      skipBrowserRedirect: false
+    }
+  });
 }
 
 async function logout() {
