@@ -94,6 +94,7 @@
     <button class="sec-btn" onclick="showSection('carboidrati')"  id="sbtn-carboidrati">🍽️ Carbo</button>
     <button class="sec-btn" onclick="showSection('correlazione')" id="sbtn-correlazione">🔗 Corr.</button>
     <button class="sec-btn" onclick="showSection('giornaliero')"  id="sbtn-giornaliero">📅 Giorno</button>
+    <button class="sec-btn" onclick="showSection('alimenti')"     id="sbtn-alimenti">🥗 Alimenti</button>
     <button class="sec-btn" onclick="showSection('attivita')"    id="sbtn-attivita">🏃 Attività</button>
   </div>
 
@@ -198,11 +199,12 @@
       <input type="file" id="carb-photo-input" accept="image/*" capture="environment" onchange="analyzePhoto(event)"/>
       <div id="carb-ai-result"></div>
       <div style="font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Oppure aggiungi manualmente</div>
-      <div class="row" style="margin-bottom:8px">
-        <input type="text" id="carb-food-name" placeholder="Alimento (es. pasta)" style="flex:1"/>
+      <div class="row" style="margin-bottom:4px;position:relative">
+        <input type="text" id="carb-food-name" placeholder="Alimento (es. pasta)" style="flex:1" oninput="showFoodSuggestions()" autocomplete="off"/>
         <input type="number" id="carb-food-g" placeholder="g" style="width:70px;flex:none"/>
         <button class="btn" style="background:#f59e0b;color:#fff;padding:10px 12px" onclick="addFoodItem()">+</button>
       </div>
+      <div id="food-suggestions" style="display:none;background:#fff;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;overflow:hidden;box-shadow:0 4px 12px rgba(0,0,0,.1)"></div>
       <div id="carb-food-tags" style="margin-bottom:10px;min-height:10px"></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
         <div>
@@ -271,6 +273,34 @@
       <button class="nav-btn" id="next-btn" onclick="changeDay(1)">›</button>
     </div>
     <div id="daily-content"></div>
+  </div>
+
+  <!-- ALIMENTI -->
+  <div id="sec-alimenti" style="display:none">
+    <div class="card">
+      <div class="card-title">🥗 Archivio alimenti</div>
+      <p style="font-size:13px;color:#64748b;margin-bottom:12px">Gli alimenti si aggiungono automaticamente quando analizzi una foto nella sezione Carbo.</p>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <button id="filter-tutti"  onclick="filterAlimenti('tutti')"  style="flex:1;padding:7px;border-radius:10px;border:2px solid #22c55e;background:#22c55e;color:#fff;font-size:12px;font-weight:700;cursor:pointer">Tutti</button>
+        <button id="filter-salato" onclick="filterAlimenti('salato')" style="flex:1;padding:7px;border-radius:10px;border:2px solid #e2e8f0;background:#f8fafc;color:#64748b;font-size:12px;font-weight:700;cursor:pointer">🧂 Salato</button>
+        <button id="filter-dolce"  onclick="filterAlimenti('dolce')"  style="flex:1;padding:7px;border-radius:10px;border:2px solid #e2e8f0;background:#f8fafc;color:#64748b;font-size:12px;font-weight:700;cursor:pointer">🍬 Dolce</button>
+      </div>
+      <input type="text" id="alimenti-search" placeholder="🔍 Cerca alimento..." oninput="renderAlimenti()" style="margin-bottom:12px"/>
+      <div id="alimenti-list"></div>
+      <div id="alimenti-empty" class="empty" style="display:none">
+        <div class="empty-icon">🥗</div>
+        <div style="font-weight:700;color:#64748b">Nessun alimento in archivio</div>
+        <div style="font-size:12px;color:#94a3b8;margin-top:4px">Analizza una foto nella sezione Carbo per iniziare</div>
+      </div>
+    </div>
+
+    <!-- Dettaglio alimento (modal) -->
+    <div id="alimento-detail" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:1000;padding:20px;display:flex;align-items:center;justify-content:center">
+      <div style="background:#fff;border-radius:18px;padding:20px;width:100%;max-width:400px;max-height:80vh;overflow-y:auto">
+        <div id="alimento-detail-content"></div>
+        <button onclick="closeAlimentoDetail()" style="width:100%;padding:10px;border-radius:10px;border:none;background:#f1f5f9;color:#64748b;font-weight:700;cursor:pointer;margin-top:12px">Chiudi</button>
+      </div>
+    </div>
   </div>
 
   <!-- ATTIVITÀ -->
@@ -707,6 +737,179 @@ function toggleAdvanced() {
   label.textContent = visible ? 'Mostra impostazioni avanzate' : 'Nascondi impostazioni avanzate';
 }
 
+// ── Archivio Alimenti ────────────────────────────────────────────────────────
+let alimentiFilter = 'tutti';
+
+function getArchivioAlimenti() {
+  return JSON.parse(localStorage.getItem('dt-archivio-alimenti') || '{}');
+}
+
+function saveAlimentoToArchivio(food) {
+  if (!food.nome || !food.carbo_per_100g) return;
+  const archivio = getArchivioAlimenti();
+  const key = food.nome.toLowerCase().trim();
+  if (!archivio[key]) {
+    archivio[key] = {
+      nome: food.nome,
+      carbo_per_100g: food.carbo_per_100g,
+      categoria: food.categoria || 'salato',
+      porzioni: [],
+      ultimoUso: new Date().toISOString()
+    };
+  }
+  // Aggiunge la porzione allo storico
+  if (food.quantita_g) {
+    archivio[key].porzioni.unshift({ g: food.quantita_g, carbo: food.carbo_g, data: new Date().toISOString() });
+    archivio[key].porzioni = archivio[key].porzioni.slice(0, 10); // max 10 porzioni
+    archivio[key].ultimoUso = new Date().toISOString();
+  }
+  localStorage.setItem('dt-archivio-alimenti', JSON.stringify(archivio));
+}
+
+function filterAlimenti(f) {
+  alimentiFilter = f;
+  ['tutti','salato','dolce'].forEach(x => {
+    const btn = document.getElementById('filter-' + x);
+    if (!btn) return;
+    btn.style.background = x === f ? '#22c55e' : '#f8fafc';
+    btn.style.color = x === f ? '#fff' : '#64748b';
+    btn.style.borderColor = x === f ? '#22c55e' : '#e2e8f0';
+  });
+  renderAlimenti();
+}
+
+function renderAlimenti() {
+  const listEl = document.getElementById('alimenti-list');
+  const emptyEl = document.getElementById('alimenti-empty');
+  if (!listEl) return;
+
+  const archivio = getArchivioAlimenti();
+  const search = document.getElementById('alimenti-search')?.value.toLowerCase() || '';
+
+  let items = Object.values(archivio)
+    .filter(a => alimentiFilter === 'tutti' || a.categoria === alimentiFilter)
+    .filter(a => !search || a.nome.toLowerCase().includes(search))
+    .sort((a, b) => new Date(b.ultimoUso) - new Date(a.ultimoUso));
+
+  if (items.length === 0) {
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.style.display = '';
+    return;
+  }
+  if (emptyEl) emptyEl.style.display = 'none';
+
+  listEl.innerHTML = items.map(a => {
+    const icon = a.categoria === 'dolce' ? '🍬' : '🧂';
+    const porzioneMedia = a.porzioni.length > 0
+      ? Math.round(a.porzioni.reduce((s, p) => s + p.g, 0) / a.porzioni.length)
+      : null;
+    return `
+    <div onclick="openAlimentoDetail('${a.nome.replace(/'/g, "\\'")}')"
+         style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #f1f5f9;cursor:pointer">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#1e293b">${icon} ${a.nome}</div>
+        <div style="font-size:11px;color:#94a3b8">${a.carbo_per_100g}g carbo/100g${porzioneMedia ? ` · porzione media ${porzioneMedia}g` : ''} · usato ${a.porzioni.length}x</div>
+      </div>
+      <div style="font-size:18px;font-weight:800;color:#f59e0b">${a.carbo_per_100g}<span style="font-size:10px;color:#94a3b8">g/100</span></div>
+    </div>`;
+  }).join('');
+}
+
+function openAlimentoDetail(nome) {
+  const archivio = getArchivioAlimenti();
+  const key = nome.toLowerCase().trim();
+  const a = archivio[key];
+  if (!a) return;
+
+  const icon = a.categoria === 'dolce' ? '🍬' : '🧂';
+  const detailEl = document.getElementById('alimento-detail');
+  const contentEl = document.getElementById('alimento-detail-content');
+
+  contentEl.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <div style="font-size:17px;font-weight:800;color:#1e293b">${icon} ${a.nome}</div>
+      <div style="background:${a.categoria==='dolce'?'#fef3c7':'#f0fdf4'};color:${a.categoria==='dolce'?'#d97706':'#16a34a'};border-radius:8px;padding:3px 8px;font-size:11px;font-weight:700">${a.categoria}</div>
+    </div>
+    <div style="background:#f8fafc;border-radius:12px;padding:14px;margin-bottom:14px;text-align:center">
+      <div style="font-size:32px;font-weight:800;color:#f59e0b">${a.carbo_per_100g}g</div>
+      <div style="font-size:12px;color:#94a3b8">carboidrati per 100g</div>
+    </div>
+    ${a.porzioni.length > 0 ? `
+    <div style="font-size:12px;font-weight:700;color:#475569;margin-bottom:8px">📅 Ultime porzioni</div>
+    ${a.porzioni.slice(0, 5).map(p => {
+      const d = new Date(p.data);
+      const ds = d.toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+      return `<div style="display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid #f1f5f9;font-size:13px">
+        <span style="color:#64748b">${ds}</span>
+        <span><strong>${p.g}g</strong> → ${p.carbo}g carbo</span>
+      </div>`;
+    }).join('')}` : ''}
+    <button onclick="addFromArchivio('${a.nome.replace(/'/g, "\\'")}')"
+      style="width:100%;padding:10px;border-radius:10px;border:none;background:#f59e0b;color:#fff;font-weight:700;cursor:pointer;margin-top:12px;font-size:14px">
+      ➕ Aggiungi al pasto corrente
+    </button>`;
+
+  detailEl.style.display = 'flex';
+}
+
+function closeAlimentoDetail() {
+  const el = document.getElementById('alimento-detail');
+  if (el) el.style.display = 'none';
+}
+
+function addFromArchivio(nome) {
+  const archivio = getArchivioAlimenti();
+  const key = nome.toLowerCase().trim();
+  const a = archivio[key];
+  if (!a) return;
+  const porzioneMedia = a.porzioni.length > 0
+    ? Math.round(a.porzioni.reduce((s, p) => s + p.g, 0) / a.porzioni.length)
+    : 100;
+  document.getElementById('carb-food-name').value = a.nome;
+  document.getElementById('carb-food-g').value = porzioneMedia;
+  closeAlimentoDetail();
+  showSection('carboidrati');
+  setTimeout(addFoodItem, 100);
+}
+
+function showFoodSuggestions() {
+  const input = document.getElementById('carb-food-name');
+  const suggestEl = document.getElementById('food-suggestions');
+  if (!input || !suggestEl) return;
+  const q = input.value.toLowerCase().trim();
+  if (q.length < 2) { suggestEl.style.display = 'none'; return; }
+
+  const archivio = getArchivioAlimenti();
+  const matches = Object.values(archivio)
+    .filter(a => a.nome.toLowerCase().includes(q))
+    .sort((a, b) => new Date(b.ultimoUso) - new Date(a.ultimoUso))
+    .slice(0, 5);
+
+  if (matches.length === 0) { suggestEl.style.display = 'none'; return; }
+
+  suggestEl.style.display = '';
+  suggestEl.innerHTML = matches.map(a => {
+    const porzioneMedia = a.porzioni.length > 0
+      ? Math.round(a.porzioni.reduce((s, p) => s + p.g, 0) / a.porzioni.length)
+      : 100;
+    return `<div onclick="selectFoodSuggestion('${a.nome.replace(/'/g, "\\'")}', ${porzioneMedia}, ${a.carbo_per_100g})"
+      style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f1f5f9;display:flex;justify-content:space-between;align-items:center"
+      onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='#fff'">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:#1e293b">${a.nome}</div>
+        <div style="font-size:11px;color:#94a3b8">porzione media ${porzioneMedia}g · ${a.carbo_per_100g}g carbo/100g</div>
+      </div>
+      <div style="font-size:14px;font-weight:800;color:#f59e0b">${Math.round(porzioneMedia * a.carbo_per_100g / 100)}g carbo</div>
+    </div>`;
+  }).join('');
+}
+
+function selectFoodSuggestion(nome, g, carboPer100g) {
+  document.getElementById('carb-food-name').value = nome;
+  document.getElementById('carb-food-g').value = g;
+  document.getElementById('food-suggestions').style.display = 'none';
+}
+
 // ── Attività fisica ───────────────────────────────────────────────────────────
 let todayActivity = JSON.parse(localStorage.getItem('dt-today-activity') || 'null');
 
@@ -935,8 +1138,8 @@ const fmtDay  = d => new Date(d+'T12:00:00').toLocaleDateString('it-IT',{weekday
 const fmtShort= d => new Date(d+'T12:00:00').toLocaleDateString('it-IT',{day:'2-digit',month:'short'});
 
 // ── Section switcher ──────────────────────────────────────────────────────────
-const SECS  = ['glicemia','libre','insulina','carboidrati','correlazione','giornaliero','attivita','impostazioni'];
-const SCOLS = {glicemia:'#3b82f6',libre:'#8b5cf6',insulina:'#6366f1',carboidrati:'#f59e0b',correlazione:'#0ea5e9',giornaliero:'#059669',attivita:'#10b981',impostazioni:'#64748b',sensore:'#8b5cf6'};
+const SECS  = ['glicemia','libre','insulina','carboidrati','correlazione','giornaliero','alimenti','attivita','impostazioni'];
+const SCOLS = {glicemia:'#3b82f6',libre:'#8b5cf6',insulina:'#6366f1',carboidrati:'#f59e0b',correlazione:'#0ea5e9',giornaliero:'#059669',alimenti:'#22c55e',attivita:'#10b981',impostazioni:'#64748b',sensore:'#8b5cf6'};
 function showSection(s) {
   currentSection = s;
   SECS.forEach(x => {
@@ -954,6 +1157,7 @@ function renderSection(s) {
   if (s==='sensore')      renderSensor();
   if (s==='libre')        { renderLibre(); fetchLibreFromGitHub(); }
   if (s==='carboidrati')  { renderCarb(); setTimeout(() => { prefillPrescribedDose(); syncActivityToCarbo(); }, 50); }
+  if (s==='alimenti')     { renderAlimenti(); }
   if (s==='attivita')     { renderActivityHistory(); }
   if (s==='correlazione') renderCorrelation();
   if (s==='giornaliero')  renderDaily();
@@ -1143,6 +1347,15 @@ async function analyzePhoto(event) {
     pendingFoods = parsed.alimenti.map(a=>({name:a.nome, grams:a.quantita_g, carbsFromAI:a.carbo_g}));
     document.getElementById('carb-total').value = parsed.totale_carbo_g;
     renderFoodTags();
+
+    // Salva automaticamente nell'archivio alimenti
+    parsed.alimenti.forEach(a => saveAlimentoToArchivio({
+      nome: a.nome,
+      carbo_per_100g: a.carbo_per_100g,
+      categoria: a.categoria || 'salato',
+      quantita_g: a.quantita_g,
+      carbo_g: a.carbo_g
+    }));
 
     window._aiAlimenti = parsed.alimenti.map(a => ({...a}));
     renderAiResult(parsed.note || '');

@@ -28,7 +28,7 @@ exports.handler = async function(event, context) {
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
-          { type: 'text', text: 'Sei un nutrizionista esperto. Analizza questo piatto. Per ogni alimento riconosci la porzione visibile e i carboidrati per 100g. Rispondi SOLO con JSON valido senza markdown, formato: {"alimenti":[{"nome":"nome alimento","quantita_g":150,"carbo_per_100g":30,"carbo_g":45}],"totale_carbo_g":45,"note":"nota opzionale"}' }
+          { type: 'text', text: 'Sei un nutrizionista esperto. Analizza questo piatto. Per ogni alimento riconosci la porzione visibile e i carboidrati per 100g. Classifica ogni alimento come "dolce" (es. biscotti, frutta, succhi, cereali, dolci) o "salato" (es. pasta, pane, riso, verdure, carne, formaggi). Rispondi SOLO con JSON valido senza markdown, formato: {"alimenti":[{"nome":"nome alimento","quantita_g":150,"carbo_per_100g":30,"carbo_g":45,"categoria":"dolce|salato"}],"totale_carbo_g":45,"note":"nota opzionale"}' }
         ]
       }];
 
