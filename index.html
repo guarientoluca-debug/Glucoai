@@ -602,6 +602,8 @@ function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
   initApp();
+  // Carica dati da Supabase in background
+  setTimeout(loadFromSupabase, 500);
 }
 
 function switchLoginTab(tab) {
@@ -682,6 +684,82 @@ function saveAll() {
   scheduleDailySync();
 }
 
+// ── Supabase DB ───────────────────────────────────────────────────────────────
+async function loadFromSupabase() {
+  if (!currentUser) return;
+  try {
+    const uid = currentUser.id;
+    const [r1, r2, r3, r4, r5] = await Promise.all([
+      sbClient.from('readings').select('*').eq('user_id', uid).order('date', {ascending:false}).limit(500),
+      sbClient.from('insulin').select('*').eq('user_id', uid).order('date', {ascending:false}).limit(500),
+      sbClient.from('meals').select('*').eq('user_id', uid).order('date', {ascending:false}).limit(200),
+      sbClient.from('libre_data').select('*').eq('user_id', uid).order('date', {ascending:false}).limit(1000),
+      sbClient.from('insulin_config').select('*').eq('user_id', uid).single(),
+    ]);
+
+    if (r1.data?.length) { readings = r1.data.map(r => ({id:r.id, value:r.value, date:r.date, timing:r.timing, note:r.note})); localStorage.setItem('dt-readings', JSON.stringify(readings)); }
+    if (r2.data?.length) { insulin = r2.data.map(i => ({id:i.id, units:i.units, type:i.type, date:i.date, note:i.note})); localStorage.setItem('dt-insulin', JSON.stringify(insulin)); }
+    if (r3.data?.length) { meals = r3.data.map(m => ({id:m.id, carbs:m.carbs, timing:m.timing, foods:m.foods||[], note:m.note, date:m.date})); localStorage.setItem('dt-meals', JSON.stringify(meals)); }
+    if (r4.data?.length) { libreData = r4.data.map(l => ({id:l.id, value:l.value, date:l.date})); localStorage.setItem('dt-libre', JSON.stringify(libreData)); }
+    if (r5.data) {
+      insulinConfig = {
+        dosePerPasto: r5.data.dose_per_pasto || insulinConfig.dosePerPasto,
+        carbRatio: r5.data.carb_ratio || insulinConfig.carbRatio,
+        carbRatioPerPasto: r5.data.carb_ratio_per_pasto || {},
+        targetGlucose: r5.data.target_glucose || insulinConfig.targetGlucose,
+        isf: r5.data.isf || insulinConfig.isf,
+        adaptiveUpdate: r5.data.adaptive_update || null,
+      };
+      localStorage.setItem('dt-ins-config', JSON.stringify(insulinConfig));
+    }
+    renderAll();
+    console.log('✅ Dati caricati da Supabase');
+  } catch(e) { console.warn('Supabase load error:', e.message); }
+}
+
+async function sbInsertReading(r) {
+  if (!currentUser) return;
+  await sbClient.from('readings').upsert({id:r.id, user_id:currentUser.id, value:r.value, date:r.date, timing:r.timing, note:r.note});
+}
+async function sbDeleteReading(id) {
+  if (!currentUser) return;
+  await sbClient.from('readings').delete().eq('id', id).eq('user_id', currentUser.id);
+}
+async function sbInsertInsulin(i) {
+  if (!currentUser) return;
+  await sbClient.from('insulin').upsert({id:i.id, user_id:currentUser.id, units:i.units, type:i.type, date:i.date, note:i.note});
+}
+async function sbDeleteInsulin(id) {
+  if (!currentUser) return;
+  await sbClient.from('insulin').delete().eq('id', id).eq('user_id', currentUser.id);
+}
+async function sbInsertMeal(m) {
+  if (!currentUser) return;
+  await sbClient.from('meals').upsert({id:m.id, user_id:currentUser.id, carbs:m.carbs, timing:m.timing, foods:m.foods, note:m.note, date:m.date});
+}
+async function sbDeleteMeal(id) {
+  if (!currentUser) return;
+  await sbClient.from('meals').delete().eq('id', id).eq('user_id', currentUser.id);
+}
+async function sbSaveConfig() {
+  if (!currentUser) return;
+  await sbClient.from('insulin_config').upsert({
+    user_id: currentUser.id,
+    dose_per_pasto: insulinConfig.dosePerPasto,
+    carb_ratio: insulinConfig.carbRatio,
+    carb_ratio_per_pasto: insulinConfig.carbRatioPerPasto || {},
+    target_glucose: insulinConfig.targetGlucose,
+    isf: insulinConfig.isf,
+    adaptive_update: insulinConfig.adaptiveUpdate || null,
+    updated_at: new Date().toISOString()
+  });
+}
+async function sbInsertLibre(items) {
+  if (!currentUser || !items.length) return;
+  const rows = items.map(l => ({id:l.id, user_id:currentUser.id, value:l.value, date:l.date}));
+  await sbClient.from('libre_data').upsert(rows, {onConflict:'id'});
+}
+
 let syncScheduled = false;
 function scheduleDailySync() {
   if (syncScheduled) return;
@@ -725,6 +803,7 @@ function saveInsulinConfig() {
     isf:           parseFloat(document.getElementById('cfg-isf')?.value)    || insulinConfig.isf    || 50,
   };
   localStorage.setItem('dt-ins-config', JSON.stringify(insulinConfig));
+  sbSaveConfig();
   const msg = document.getElementById('cfg-msg');
   msg.textContent = '✅ Configurazione salvata!';
   msg.style.color = '#16a34a';
@@ -1421,13 +1500,15 @@ function updateCounts() {
 function addReading() {
   const v=parseInt(document.getElementById('g-val').value);
   if (!v||v<20||v>600) return;
-  readings.push({id:Date.now(),value:v,date:new Date().toISOString(),
+  const r={id:Date.now(),value:v,date:new Date().toISOString(),
     timing:document.getElementById('g-timing').value,
-    note:document.getElementById('g-note').value});
-  saveAll(); document.getElementById('g-val').value=''; document.getElementById('g-note').value='';
+    note:document.getElementById('g-note').value};
+  readings.push(r);
+  saveAll(); sbInsertReading(r);
+  document.getElementById('g-val').value=''; document.getElementById('g-note').value='';
   renderAll();
 }
-function deleteReading(id){readings=readings.filter(r=>r.id!==id);saveAll();renderAll();}
+function deleteReading(id){readings=readings.filter(r=>r.id!==id);saveAll();sbDeleteReading(id);renderAll();}
 
 function setInsulinType(t) {
   insulinType=t;
@@ -1443,12 +1524,14 @@ function setInsulinType(t) {
 function addInsulin() {
   const u=parseFloat(document.getElementById('i-units').value);
   if (!u||u<=0||u>200) return;
-  insulin.push({id:Date.now(),units:u,type:insulinType,date:new Date().toISOString(),
-    note:document.getElementById('i-note').value});
-  saveAll(); document.getElementById('i-units').value=''; document.getElementById('i-note').value='';
+  const i={id:Date.now(),units:u,type:insulinType,date:new Date().toISOString(),
+    note:document.getElementById('i-note').value};
+  insulin.push(i);
+  saveAll(); sbInsertInsulin(i);
+  document.getElementById('i-units').value=''; document.getElementById('i-note').value='';
   renderAll();
 }
-function deleteInsulin(id){insulin=insulin.filter(i=>i.id!==id);saveAll();renderAll();}
+function deleteInsulin(id){insulin=insulin.filter(i=>i.id!==id);saveAll();sbDeleteInsulin(id);renderAll();}
 
 function addSensorReading() {
   const g=parseInt(document.getElementById('s-glucometro').value);
@@ -1500,14 +1583,15 @@ function estimateCarbsFromFoods() {
 function addMeal() {
   const carb = parseFloat(document.getElementById('carb-total').value);
   if (!carb && !pendingFoods.length) return;
-  meals.push({
+  const m = {
     id:Date.now(), carbs:carb||0,
     timing:document.getElementById('carb-timing').value,
     foods:[...pendingFoods],
     note:document.getElementById('carb-note').value,
     date:new Date().toISOString(),
-  });
-  saveAll();
+  };
+  meals.push(m);
+  saveAll(); sbInsertMeal(m);
   pendingFoods=[];
   document.getElementById('carb-total').value='';
   document.getElementById('carb-note').value='';
@@ -1515,7 +1599,7 @@ function addMeal() {
   renderFoodTags();
   renderAll();
 }
-function deleteMeal(id){meals=meals.filter(m=>m.id!==id);saveAll();renderAll();}
+function deleteMeal(id){meals=meals.filter(m=>m.id!==id);saveAll();sbDeleteMeal(id);renderAll();}
 
 // ── Photo analysis (Claude AI) ────────────────────────────────────────────────
 function renderAiResult(note) {
