@@ -407,6 +407,13 @@
       "type": "lenta",
       "date": "2026-06-12T22:46:55.298Z",
       "note": ""
+    },
+    {
+      "id": 1781332066740,
+      "units": 11,
+      "type": "rapida",
+      "date": "2026-06-13T06:27:46.740Z",
+      "note": ""
     }
   ],
   "sensors": [
@@ -852,6 +859,20 @@
       ],
       "note": "",
       "date": "2026-06-12T18:29:26.866Z"
+    },
+    {
+      "id": 1781332077555,
+      "carbs": 102,
+      "timing": "colazione",
+      "foods": [
+        {
+          "name": "Biscotto ai cereali con gocce di cioccolato",
+          "grams": 25,
+          "carbsFromAI": 17
+        }
+      ],
+      "note": "",
+      "date": "2026-06-13T06:27:57.555Z"
     }
   ],
   "libreData": [
@@ -1041,5 +1062,5 @@
       "campioni": 8
     }
   },
-  "savedAt": "2026-06-13T06:23:41.515Z"
+  "savedAt": "2026-06-13T07:07:53.426Z"
 }
