@@ -589,7 +589,8 @@ const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
     storageKey: 'dt-auth-session',
     storage: window.localStorage,
     autoRefreshToken: true,
-    detectSessionInUrl: true
+    detectSessionInUrl: true,
+    flowType: 'implicit'
   }
 });
 
