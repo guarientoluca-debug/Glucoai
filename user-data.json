@@ -873,6 +873,20 @@
       ],
       "note": "",
       "date": "2026-06-13T06:27:57.555Z"
+    },
+    {
+      "id": 1781346909086,
+      "carbs": 11,
+      "timing": "spuntino",
+      "foods": [
+        {
+          "name": "Succo e polpa di albicocca Solevita",
+          "grams": 200,
+          "carbsFromAI": 22
+        }
+      ],
+      "note": "",
+      "date": "2026-06-13T10:35:09.086Z"
     }
   ],
   "libreData": [
@@ -1062,5 +1076,5 @@
       "campioni": 8
     }
   },
-  "savedAt": "2026-06-13T07:07:53.426Z"
+  "savedAt": "2026-06-13T10:35:15.350Z"
 }
