@@ -551,17 +551,33 @@
     </div>
   </div>
 
-  <div style="border-top:1px solid #e2e8f0;padding-top:16px">
-    <div style="font-size:11px;font-weight:700;color:#94a3b8;letter-spacing:1px;text-transform:uppercase;margin-bottom:9px;text-align:center">💾 Backup dati</div>
-    <div style="display:flex;gap:8px;margin-bottom:7px">
-      <button class="btn" onclick="exportData()" style="flex:1;background:#f1f5f9;color:#475569;font-size:12px">⬇️ Esporta JSON</button>
-      <button class="btn" onclick="document.getElementById('import-file').click()" style="flex:1;background:#f1f5f9;color:#475569;font-size:12px">⬆️ Importa JSON</button>
+  <!-- Dati account -->
+  <div class="card" style="margin-top:12px">
+    <div class="card-title">👤 Il mio account</div>
+    <div style="margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:4px">NOME</div>
+      <input type="text" id="user-nome" placeholder="Il tuo nome" style="margin-bottom:0"/>
     </div>
-    <input type="file" id="import-file" accept=".json" style="display:none" onchange="importData(event)"/>
-    <div id="backup-msg" style="font-size:12px;text-align:center;color:#94a3b8;min-height:16px"></div>
-    <button onclick="logout()" style="width:100%;padding:10px;border:none;border-radius:11px;background:#fef2f2;color:#ef4444;font-weight:700;font-size:13px;cursor:pointer;margin-top:8px">🚪 Esci dall'account</button>
+    <div style="margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:4px">EMAIL</div>
+      <input type="email" id="user-email" placeholder="Email" style="margin-bottom:0"/>
+    </div>
+    <button class="btn" onclick="saveUserProfile()" style="width:100%;background:#3b82f6;color:#fff;font-size:13px;margin-bottom:12px">Salva profilo</button>
+
+    <div style="border-top:1px solid #f1f5f9;padding-top:12px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:#94a3b8;margin-bottom:8px">🔑 CAMBIA PASSWORD</div>
+      <input type="password" id="user-new-password" placeholder="Nuova password (min 6 caratteri)" style="margin-bottom:6px"/>
+      <input type="password" id="user-confirm-password" placeholder="Conferma nuova password" style="margin-bottom:0"/>
+    </div>
+    <button class="btn" onclick="changePassword()" style="width:100%;background:#6366f1;color:#fff;font-size:13px;margin-bottom:4px">Cambia password</button>
+    <div id="profile-msg" style="font-size:11px;text-align:center;min-height:16px;margin-bottom:8px"></div>
+
+    <div style="border-top:1px solid #f1f5f9;padding-top:12px">
+      <button onclick="logout()" style="width:100%;padding:12px;border:none;border-radius:11px;background:#fef2f2;color:#ef4444;font-weight:700;font-size:14px;cursor:pointer">🚪 Esci dall'account</button>
+    </div>
   </div>
-  <div style="font-size:10px;color:#cbd5e1;text-align:center;margin-top:14px">Dati salvati nel browser · Non sostituisce il parere medico</div>
+
+  <div style="font-size:10px;color:#cbd5e1;text-align:center;margin-top:14px">Non sostituisce il parere medico</div>
 </div>
 </div>
 
@@ -642,6 +658,49 @@ async function loginWithGoogle() {
 
 async function logout() {
   await sbClient.auth.signOut();
+}
+
+function prefillUserProfile() {
+  if (!currentUser) return;
+  const emailEl = document.getElementById('user-email');
+  const nomeEl = document.getElementById('user-nome');
+  if (emailEl) emailEl.value = currentUser.email || '';
+  if (nomeEl) nomeEl.value = currentUser.user_metadata?.nome || '';
+}
+
+async function saveUserProfile() {
+  const nome = document.getElementById('user-nome')?.value.trim();
+  const email = document.getElementById('user-email')?.value.trim();
+  const msg = document.getElementById('profile-msg');
+  if (!nome && !email) return;
+  try {
+    const updates = {};
+    if (email && email !== currentUser.email) updates.email = email;
+    if (nome) updates.data = { nome };
+    if (Object.keys(updates).length) {
+      const { error } = await sbClient.auth.updateUser(updates);
+      if (error) throw error;
+      await sbClient.from('profiles').upsert({ id: currentUser.id, email: email || currentUser.email, nome });
+    }
+    msg.textContent = '✅ Profilo aggiornato!'; msg.style.color = '#16a34a';
+  } catch(e) { msg.textContent = '❌ ' + e.message; msg.style.color = '#ef4444'; }
+  setTimeout(() => { if(msg) msg.textContent = ''; }, 3000);
+}
+
+async function changePassword() {
+  const pwd = document.getElementById('user-new-password')?.value;
+  const pwd2 = document.getElementById('user-confirm-password')?.value;
+  const msg = document.getElementById('profile-msg');
+  if (!pwd || pwd.length < 6) { msg.textContent = '❌ Password minimo 6 caratteri'; msg.style.color = '#ef4444'; return; }
+  if (pwd !== pwd2) { msg.textContent = '❌ Le password non coincidono'; msg.style.color = '#ef4444'; return; }
+  try {
+    const { error } = await sbClient.auth.updateUser({ password: pwd });
+    if (error) throw error;
+    msg.textContent = '✅ Password cambiata!'; msg.style.color = '#16a34a';
+    document.getElementById('user-new-password').value = '';
+    document.getElementById('user-confirm-password').value = '';
+  } catch(e) { msg.textContent = '❌ ' + e.message; msg.style.color = '#ef4444'; }
+  setTimeout(() => { if(msg) msg.textContent = ''; }, 3000);
 }
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -1487,6 +1546,7 @@ function renderSection(s) {
   if (s==='carboidrati')  { renderCarb(); setTimeout(() => { prefillPrescribedDose(); syncActivityToCarbo(); }, 50); }
   if (s==='alimenti')     { renderAlimenti(); }
   if (s==='attivita')     { renderActivityHistory(); }
+  if (s==='impostazioni') { prefillUserProfile(); }
   if (s==='correlazione') renderCorrelation();
   if (s==='giornaliero')  renderDaily();
 }
