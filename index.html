@@ -2334,7 +2334,7 @@ function exportData() {
 function importData(event) {
   const file=event.target.files[0]; if(!file) return;
   const reader=new FileReader();
-  reader.onload=e=>{
+  reader.onload=async e=>{
     try {
       const data=JSON.parse(e.target.result);
       if(!data.readings||!data.insulin) throw new Error('Formato non valido');
@@ -2343,9 +2343,45 @@ function importData(event) {
       insulin=merge(insulin,data.insulin);
       sensors=merge(sensors,data.sensors||[]);
       meals=merge(meals,data.meals||[]);
-      libreData=merge(libreData,data.libre||[]);
+      libreData=merge(libreData,data.libreData||data.libre||[]);
       saveAll(); renderAll();
-      showBackupMsg(`✅ Importati ${data.readings.length} glicemie, ${data.insulin.length} dosi, ${(data.libre||[]).length} libre.`,'#16a34a');
+      showBackupMsg(`✅ Importati ${data.readings.length} glicemie, ${data.insulin.length} dosi. Sincronizzazione Supabase in corso...`,'#16a34a');
+
+      // Bulk insert su Supabase
+      if (currentUser) {
+        const uid = currentUser.id;
+        try {
+          // Readings
+          if (readings.length) {
+            const rows = readings.map(r => ({id:r.id, user_id:uid, value:r.value, date:r.date, timing:r.timing||'digiuno', note:r.note||''}));
+            await sbClient.from('readings').upsert(rows, {onConflict:'id'});
+          }
+          // Insulin
+          if (insulin.length) {
+            const rows = insulin.map(i => ({id:i.id, user_id:uid, units:i.units, type:i.type, date:i.date, note:i.note||''}));
+            await sbClient.from('insulin').upsert(rows, {onConflict:'id'});
+          }
+          // Meals
+          if (meals.length) {
+            const rows = meals.map(m => ({id:m.id, user_id:uid, carbs:m.carbs, timing:m.timing, foods:m.foods||[], note:m.note||'', date:m.date}));
+            await sbClient.from('meals').upsert(rows, {onConflict:'id'});
+          }
+          // Libre
+          if (libreData.length) {
+            const rows = libreData.map(l => ({id:l.id, user_id:uid, value:l.value, date:l.date}));
+            await sbClient.from('libre_data').upsert(rows, {onConflict:'id'});
+          }
+          // Config
+          if (data.insulinConfig) {
+            insulinConfig = {...insulinConfig, ...data.insulinConfig};
+            localStorage.setItem('dt-ins-config', JSON.stringify(insulinConfig));
+            await sbSaveConfig();
+          }
+          showBackupMsg(`✅ Migrazione completata! ${readings.length} glicemie, ${insulin.length} dosi, ${meals.length} pasti, ${libreData.length} libre su Supabase.`,'#16a34a');
+        } catch(sbErr) {
+          showBackupMsg(`⚠️ Dati importati localmente ma errore Supabase: ${sbErr.message}`,'#f59e0b');
+        }
+      }
     } catch(err){ showBackupMsg('❌ File non valido.','#dc2626'); }
     event.target.value='';
   };
