@@ -596,24 +596,31 @@ const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
 let currentUser = null;
 
 async function initAuth() {
-  // Gestisce il callback OAuth dall'URL hash
-  const { data: { session }, error } = await sbClient.auth.getSession();
+  // Ascolta prima i cambiamenti di stato (cattura il callback OAuth)
+  sbClient.auth.onAuthStateChange((event, session) => {
+    if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+      currentUser = session.user;
+      // Pulisce l'URL dopo OAuth
+      if (window.location.hash || window.location.search.includes('code=')) {
+        window.history.replaceState({}, document.title, '/');
+      }
+      if (document.getElementById('main-app').style.display === 'none' || !document.getElementById('main-app').style.display) {
+        showApp();
+      }
+    } else if (event === 'SIGNED_OUT') {
+      currentUser = null;
+      showLoginScreen();
+    }
+  });
+
+  // Poi controlla la sessione esistente
+  const { data: { session } } = await sbClient.auth.getSession();
   if (session?.user) {
     currentUser = session.user;
     showApp();
   } else {
     showLoginScreen();
   }
-
-  sbClient.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN' && session?.user) {
-      currentUser = session.user;
-      showApp();
-    } else if (event === 'SIGNED_OUT') {
-      currentUser = null;
-      showLoginScreen();
-    }
-  });
 }
 
 function showLoginScreen() {
@@ -663,8 +670,7 @@ async function loginWithGoogle() {
   await sbClient.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: 'https://luminous-pegasus-e51837.netlify.app/auth/callback',
-      queryParams: { access_type: 'offline', prompt: 'consent' }
+      redirectTo: 'https://luminous-pegasus-e51837.netlify.app',
     }
   });
 }
