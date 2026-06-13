@@ -680,12 +680,18 @@ async function logout() {
   await sbClient.auth.signOut();
 }
 
-function prefillUserProfile() {
+async function prefillUserProfile() {
   if (!currentUser) return;
   const emailEl = document.getElementById('user-email');
   const nomeEl = document.getElementById('user-nome');
   if (emailEl) emailEl.value = currentUser.email || '';
-  if (nomeEl) nomeEl.value = currentUser.user_metadata?.nome || '';
+  // Carica nome da tabella profiles
+  try {
+    const { data } = await sbClient.from('profiles').select('nome').eq('id', currentUser.id).single();
+    if (nomeEl) nomeEl.value = data?.nome || currentUser.user_metadata?.nome || '';
+  } catch(e) {
+    if (nomeEl) nomeEl.value = currentUser.user_metadata?.nome || '';
+  }
 }
 
 async function saveUserProfile() {
@@ -1685,8 +1691,26 @@ function deleteMeal(id){meals=meals.filter(m=>m.id!==id);saveAll();sbDeleteMeal(
 function renderAiResult(note) {
   const resultEl = document.getElementById('carb-ai-result');
   if (!window._aiAlimenti) return;
+
+  // Se il DOM esiste già, aggiorna solo i valori senza ricostruire (evita perdita focus)
+  const existing = resultEl.querySelector('.carb-result');
+  if (existing) {
+    let totale = 0;
+    window._aiAlimenti.forEach((a, i) => {
+      const carbo = Math.round((a.carbo_per_100g||0)*(a.quantita_g||0)/100);
+      totale += carbo;
+      const carboEl = resultEl.querySelector(`[data-carbo="${i}"]`);
+      if (carboEl) carboEl.textContent = carbo + 'g carbo';
+    });
+    const totaleEl = resultEl.querySelector('[data-totale]');
+    if (totaleEl) totaleEl.textContent = totale + 'g';
+    document.getElementById('carb-total').value = totale;
+    calcInsulinDose();
+    return;
+  }
+
+  // Prima costruzione del DOM
   const totale = window._aiAlimenti.reduce((s, a) => s + Math.round((a.carbo_per_100g || 0) * (a.quantita_g || 0) / 100), 0);
-  document.getElementById('carb-total').value = totale;
   resultEl.innerHTML = `
   <div class="carb-result">
     <div style="font-size:11px;font-weight:700;color:#16a34a;margin-bottom:10px">🤖 Analisi Claude — modifica i grammi</div>
@@ -1694,7 +1718,7 @@ function renderAiResult(note) {
     <div style="margin-bottom:10px;padding-bottom:10px;border-bottom:1px solid #dcfce7">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
         <span style="font-size:13px;font-weight:600;color:#1e293b">${a.nome}</span>
-        <span style="font-size:11px;color:#f59e0b;font-weight:700">${Math.round((a.carbo_per_100g||0)*(a.quantita_g||0)/100)}g carbo</span>
+        <span data-carbo="${i}" style="font-size:11px;color:#f59e0b;font-weight:700">${Math.round((a.carbo_per_100g||0)*(a.quantita_g||0)/100)}g carbo</span>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <div style="flex:1">
@@ -1711,7 +1735,7 @@ function renderAiResult(note) {
     </div>`).join('')}
     <div class="carb-item" style="border-top:2px solid #bbf7d0;padding-top:8px;border-bottom:none">
       <span style="font-weight:700">TOTALE CARBOIDRATI</span>
-      <span style="color:#f59e0b;font-size:18px;font-weight:800">${totale}g</span>
+      <span data-totale style="color:#f59e0b;font-size:18px;font-weight:800">${totale}g</span>
     </div>
     ${note?`<div style="font-size:11px;color:#64748b;margin-top:6px">💬 ${note}</div>`:''}
   </div>`;
