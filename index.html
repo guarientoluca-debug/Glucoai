@@ -207,6 +207,7 @@
   .ins-delta-neg{color:#22c55e;font-weight:700;font-size:13px}
   .ins-delta-ok{color:#94a3b8;font-weight:700;font-size:13px}
   .config-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -618,6 +619,15 @@ const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
 let currentUser = null;
 
 async function initAuth() {
+  // Controlla subito se siamo su un link di recovery/conferma
+  const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));
+  const queryParams = new URLSearchParams(window.location.search);
+  const type = hashParams.get('type') || queryParams.get('type');
+  if (type === 'recovery') {
+    // Lascia che Supabase elabori il token
+    await new Promise(r => setTimeout(r, 500));
+  }
+
   // Ascolta prima i cambiamenti di stato (cattura il callback OAuth e recovery)
   sbClient.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY') {
@@ -870,6 +880,10 @@ async function loadFromSupabase() {
     renderAll();
     console.log('✅ Dati caricati da Supabase');
   } catch(e) { console.warn('Supabase load error:', e.message); }
+  finally {
+    const ov = document.getElementById('sb-loading');
+    if (ov) ov.remove();
+  }
 }
 
 async function sbInsertReading(r) {
