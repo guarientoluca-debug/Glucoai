@@ -631,16 +631,18 @@ async function initAuth() {
   // Ascolta prima i cambiamenti di stato (cattura il callback OAuth e recovery)
   sbClient.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY') {
-      // Mostra form reset password
       showResetPasswordForm();
       return;
     }
-    if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
+    if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') && session?.user) {
       currentUser = session.user;
-      if (window.location.hash || window.location.search.includes('code=')) {
+      // Pulisce URL dopo conferma email o OAuth
+      if (window.location.hash || window.location.search.includes('code=') || window.location.search.includes('token=')) {
         window.history.replaceState({}, document.title, '/');
       }
-      if (document.getElementById('main-app').style.display === 'none' || !document.getElementById('main-app').style.display) {
+      const mainApp = document.getElementById('main-app');
+      const loginScreen = document.getElementById('login-screen');
+      if (!mainApp.style.display || mainApp.style.display === 'none') {
         showApp();
       }
     } else if (event === 'SIGNED_OUT') {
@@ -701,7 +703,14 @@ async function confirmPasswordReset() {
   if (pwd !== pwd2) { msg.textContent = 'Le password non coincidono'; msg.className = 'login-msg error'; return; }
   const { error } = await sbClient.auth.updateUser({ password: pwd });
   if (error) { msg.textContent = error.message; msg.className = 'login-msg error'; }
-  else { msg.textContent = '✅ Password aggiornata!'; msg.className = 'login-msg success'; setTimeout(() => showApp(), 1500); }
+  else {
+    msg.textContent = '✅ Password aggiornata! Effettua il login...';
+    msg.className = 'login-msg success';
+    setTimeout(async () => {
+      await sbClient.auth.signOut();
+      showLoginTab();
+    }, 1500);
+  }
 }
 
 function showLoginScreen() {
