@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reset Password - Diabete Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+           min-height: 100vh; display: flex; align-items: center; justify-content: center;
+           font-family: -apple-system, sans-serif; padding: 20px; }
+    .card { background: white; border-radius: 20px; padding: 32px 24px; width: 100%; max-width: 380px; }
+    .logo { text-align: center; font-size: 40px; margin-bottom: 8px; }
+    h2 { text-align: center; font-size: 22px; color: #1e293b; margin-bottom: 6px; }
+    p { text-align: center; font-size: 13px; color: #64748b; margin-bottom: 20px; }
+    input { width: 100%; padding: 14px 16px; border: 2px solid #e2e8f0; border-radius: 12px;
+            font-size: 15px; margin-bottom: 12px; outline: none; }
+    input:focus { border-color: #6366f1; }
+    button { width: 100%; padding: 14px; background: linear-gradient(135deg, #6366f1, #8b5cf6);
+             color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 700;
+             cursor: pointer; margin-bottom: 8px; }
+    .msg { text-align: center; font-size: 13px; margin-top: 8px; min-height: 20px; }
+    .error { color: #ef4444; }
+    .success { color: #16a34a; }
+    .spinner { width: 40px; height: 40px; border: 3px solid #e2e8f0; border-top-color: #6366f1;
+               border-radius: 50%; animation: spin 0.8s linear infinite; margin: 20px auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="logo">🩺</div>
+    <h2>Nuova password</h2>
+    <p>Scegli la tua nuova password</p>
+    <div id="loading"><div class="spinner"></div></div>
+    <div id="form" style="display:none">
+      <input type="password" id="pwd1" placeholder="Nuova password (min 6 caratteri)"/>
+      <input type="password" id="pwd2" placeholder="Conferma nuova password"/>
+      <button onclick="resetPassword()">Salva nuova password</button>
+      <div class="msg" id="msg"></div>
+    </div>
+    <div id="error-state" style="display:none">
+      <div class="msg error">Link non valido o scaduto.</div>
+      <br>
+      <button onclick="window.location.href='/'">Torna al login</button>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://zynytvhmlnvlvswuhtse.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_bhmy7olw7-7VxATfSW248g_siFu7lFO';
+    const sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: true, storageKey: 'dt-auth-session', detectSessionInUrl: true, flowType: 'implicit' }
+    });
+
+    async function init() {
+      // Supabase mette il token nell'hash
+      const hash = window.location.hash;
+      if (hash.includes('access_token') || hash.includes('type=recovery')) {
+        await new Promise(r => setTimeout(r, 800));
+        const { data: { session } } = await sbClient.auth.getSession();
+        if (session) {
+          document.getElementById('loading').style.display = 'none';
+          document.getElementById('form').style.display = '';
+          return;
+        }
+      }
+      // Nessun token valido
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error-state').style.display = '';
+    }
+
+    async function resetPassword() {
+      const pwd = document.getElementById('pwd1').value;
+      const pwd2 = document.getElementById('pwd2').value;
+      const msg = document.getElementById('msg');
+      if (!pwd || pwd.length < 6) { msg.textContent = 'Password minimo 6 caratteri'; msg.className = 'msg error'; return; }
+      if (pwd !== pwd2) { msg.textContent = 'Le password non coincidono'; msg.className = 'msg error'; return; }
+      msg.textContent = 'Salvataggio...'; msg.className = 'msg';
+      const { error } = await sbClient.auth.updateUser({ password: pwd });
+      if (error) { msg.textContent = error.message; msg.className = 'msg error'; }
+      else {
+        msg.textContent = '✅ Password aggiornata!'; msg.className = 'msg success';
+        setTimeout(() => window.location.href = '/', 1500);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

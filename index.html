@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="it"><!-- v2.1 -->
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -687,7 +687,7 @@ async function sendPasswordReset() {
   if (!email) { msg.textContent = 'Inserisci la tua email'; msg.className = 'login-msg error'; return; }
   msg.textContent = 'Invio in corso...'; msg.className = 'login-msg';
   const { error } = await sbClient.auth.resetPasswordForEmail(email, {
-    redirectTo: 'https://luminous-pegasus-e51837.netlify.app'
+    redirectTo: 'https://luminous-pegasus-e51837.netlify.app/reset'
   });
   if (error) { msg.textContent = error.message; msg.className = 'login-msg error'; }
   else { msg.textContent = '✅ Email inviata! Controlla la tua casella.'; msg.className = 'login-msg success'; }
