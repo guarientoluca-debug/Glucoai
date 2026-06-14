@@ -721,7 +721,10 @@ function showLoginScreen() {
 function showApp() {
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'block';
+  // Reset dati per evitare di mostrare dati di un altro utente
+  readings = []; insulin = []; sensors = []; meals = []; libreData = [];
   initApp();
+  renderAll();
   // Carica dati da Supabase in background
   setTimeout(loadFromSupabase, 500);
 }
@@ -766,6 +769,9 @@ async function loginWithGoogle() {
 }
 
 async function logout() {
+  // Pulisce tutti i dati utente dal localStorage
+  ['dt-readings','dt-insulin','dt-sensors','dt-meals','dt-libre','dt-ins-config','dt-apikey','dt-activities','dt-alimenti','dt-last-sync'].forEach(k => localStorage.removeItem(k));
+  readings = []; insulin = []; sensors = []; meals = []; libreData = [];
   await sbClient.auth.signOut();
 }
 
