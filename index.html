@@ -1905,7 +1905,7 @@ function renderGlicemia() {
     {label:'Alta 126–180',count:vals.filter(v=>v>=126&&v<=180).length,color:'#f97316'},
     {label:'Iper > 180',count:vals.filter(v=>v>180).length,color:'#dc2626'},
   ].filter(z=>z.count>0);
-  const last=readings[readings.length-1],zL=getZone(last.value);
+  const last=readings.slice().sort((a,b)=>new Date(b.date)-new Date(a.date))[0],zL=getZone(last.value);
   const chartData=readings.slice(-20),cVals=chartData.map(r=>r.value);
   const cMin=Math.min(...cVals,60),cMax=Math.max(...cVals,200),cRange=cMax-cMin||1;
   const W=300,H=85,pad=13;
