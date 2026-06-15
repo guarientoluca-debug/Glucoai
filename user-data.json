@@ -1289,17 +1289,17 @@
       "cena": 10,
       "dormire": 28
     },
-    "carbRatio": 7.5,
+    "carbRatio": 8,
     "targetGlucose": 120,
     "isf": 50,
     "carbRatioPerPasto": {
-      "colazione": 6,
+      "colazione": 7.5,
       "pranzo": 9.5,
       "cena": 6
     },
     "adaptiveUpdate": {
-      "updatedAt": "2026-06-12T13:54:16.736Z",
-      "campioni": 8
+      "updatedAt": "2026-06-15T08:54:12.772Z",
+      "campioni": 13
     }
   },
   "savedAt": "2026-06-15T08:37:15.285Z"
