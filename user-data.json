@@ -300,9 +300,23 @@
       "date": "2026-06-07T08:53:02.872+00:00",
       "timing": "digiuno",
       "note": ""
+    },
+    {
+      "id": 1781549352154,
+      "value": 130,
+      "date": "2026-06-15T18:49:12.154Z",
+      "timing": "post-pasto",
+      "note": ""
     }
   ],
   "insulin": [
+    {
+      "id": 1781548199715,
+      "units": 10,
+      "type": "rapida",
+      "date": "2026-06-15T18:29:59.715+00:00",
+      "note": ""
+    },
     {
       "id": 1781522980026,
       "units": 12,
@@ -542,79 +556,42 @@
       "note": ""
     }
   ],
-  "sensors": [
-    {
-      "id": 1780835061819,
-      "glucometro": 108,
-      "libre": 50,
-      "date": "2026-06-07T12:24:21.819Z",
-      "note": ""
-    },
-    {
-      "id": 1780852251630,
-      "glucometro": 190,
-      "libre": 90,
-      "date": "2026-06-07T17:10:51.630Z",
-      "note": ""
-    },
-    {
-      "id": 1780897240230,
-      "glucometro": 92,
-      "libre": 64,
-      "date": "2026-06-08T05:40:40.230Z",
-      "note": ""
-    },
-    {
-      "id": 1780917966293,
-      "glucometro": 96,
-      "libre": 81,
-      "date": "2026-06-08T11:26:06.293Z",
-      "note": ""
-    },
-    {
-      "id": 1780943538747,
-      "glucometro": 160,
-      "libre": 130,
-      "date": "2026-06-08T18:32:18.747Z",
-      "note": ""
-    },
-    {
-      "id": 1780949117493,
-      "glucometro": 48,
-      "libre": 53,
-      "date": "2026-06-08T20:05:17.493Z",
-      "note": ""
-    },
-    {
-      "id": 1780955175369,
-      "glucometro": 69,
-      "libre": 78,
-      "date": "2026-06-08T21:46:15.369Z",
-      "note": ""
-    },
-    {
-      "id": 1780983400323,
-      "glucometro": 66,
-      "libre": 53,
-      "date": "2026-06-09T05:36:40.323Z",
-      "note": ""
-    },
-    {
-      "id": 1780993031799,
-      "glucometro": 58,
-      "libre": 58,
-      "date": "2026-06-09T08:17:11.799Z",
-      "note": ""
-    },
-    {
-      "id": 1781004163829,
-      "glucometro": 117,
-      "libre": 98,
-      "date": "2026-06-09T11:22:43.829Z",
-      "note": ""
-    }
-  ],
+  "sensors": [],
   "meals": [
+    {
+      "id": 1781548184572,
+      "carbs": 62,
+      "timing": "cena",
+      "foods": [
+        {
+          "name": "Polpette di carne",
+          "grams": 90,
+          "carbsFromAI": 2.7
+        },
+        {
+          "name": "Pane tostato",
+          "grams": 40,
+          "carbsFromAI": 21.6
+        },
+        {
+          "name": "Panino/pane",
+          "grams": 50,
+          "carbsFromAI": 24
+        },
+        {
+          "name": "Patatina fritta",
+          "grams": 20,
+          "carbsFromAI": 10
+        },
+        {
+          "name": "Insalata verde (lattuga)",
+          "grams": 80,
+          "carbsFromAI": 2.56
+        }
+      ],
+      "note": "",
+      "date": "2026-06-15T18:29:44.572+00:00"
+    },
     {
       "id": 1781522970544,
       "carbs": 20,
@@ -1365,5 +1342,5 @@
       "campioni": 13
     }
   },
-  "savedAt": "2026-06-15T18:22:30.827Z"
+  "savedAt": "2026-06-15T19:07:11.047Z"
 }
