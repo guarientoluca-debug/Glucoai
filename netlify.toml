@@ -1,0 +1,2 @@
+[functions."sync-libre-scheduled"]
+schedule = "0 */4 * * *"
