@@ -115,12 +115,12 @@ exports.handler = async function(event, context) {
     // Fetch existing readings from Supabase to avoid duplicates
     const { data: existing } = await supabase
       .from('libre_data')
-      .select('timestamp')
+      .select('date')
       .eq('user_id', user_id)
-      .order('timestamp', { ascending: false })
+      .order('date', { ascending: false })
       .limit(1);
 
-    const lastTimestamp = existing?.[0]?.timestamp ? new Date(existing[0].timestamp).getTime() : 0;
+    const lastTimestamp = existing?.[0]?.date ? new Date(existing[0].date).getTime() : 0;
     const INTERVAL_MS = 150 * 60 * 1000;
     let lastTime = lastTimestamp;
     const toInsert = [];
@@ -136,8 +136,7 @@ exports.handler = async function(event, context) {
       toInsert.push({
         user_id,
         value: val,
-        timestamp: dt.toISOString(),
-        source: 'librelink',
+        date: dt.toISOString(),
       });
       lastTime = dt.getTime();
     }
