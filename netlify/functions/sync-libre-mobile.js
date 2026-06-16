@@ -134,6 +134,7 @@ exports.handler = async function(event, context) {
       if (!val || val < 30 || val > 500) continue;
       if (dt.getTime() - lastTime < INTERVAL_MS) continue;
       toInsert.push({
+        id: dt.getTime(),
         user_id,
         value: val,
         date: dt.toISOString(),
