@@ -89,7 +89,7 @@ async function syncUser(supabase, user_id, email, password) {
       .limit(1);
 
     const lastTimestamp = existing?.[0]?.date ? new Date(existing[0].date).getTime() : 0;
-    const INTERVAL_MS = 150 * 60 * 1000;
+    const INTERVAL_MS = 110 * 60 * 1000; // ~2 ore
     let lastTime = lastTimestamp;
     const toInsert = [];
 
