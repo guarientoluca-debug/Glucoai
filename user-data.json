@@ -363,6 +363,13 @@
       "date": "2026-06-17T11:15:22.722Z",
       "timing": "pre-pasto",
       "note": ""
+    },
+    {
+      "id": 1781709147128,
+      "value": 241,
+      "date": "2026-06-17T15:12:27.128Z",
+      "timing": "post-pasto",
+      "note": ""
     }
   ],
   "insulin": [
@@ -644,6 +651,13 @@
       "units": 10,
       "type": "rapida",
       "date": "2026-06-07T10:40:10.512+00:00",
+      "note": ""
+    },
+    {
+      "id": 1781695108108,
+      "units": 8,
+      "type": "rapida",
+      "date": "2026-06-17T11:18:28.108Z",
       "note": ""
     }
   ],
@@ -1226,6 +1240,25 @@
       "foods": [],
       "note": "",
       "date": "2026-06-07T17:36:10.379+00:00"
+    },
+    {
+      "id": 1781695099853,
+      "carbs": 70,
+      "timing": "pranzo",
+      "foods": [
+        {
+          "name": "Pasta fritta",
+          "grams": 120,
+          "carbsFromAI": 60
+        },
+        {
+          "name": "Salsa/Sugo marrone",
+          "grams": 80,
+          "carbsFromAI": 6.4
+        }
+      ],
+      "note": "",
+      "date": "2026-06-17T11:18:19.853Z"
     }
   ],
   "libreData": [
@@ -1630,5 +1663,5 @@
       "campioni": 15
     }
   },
-  "savedAt": "2026-06-17T11:15:25.180Z"
+  "savedAt": "2026-06-17T15:15:44.016Z"
 }
