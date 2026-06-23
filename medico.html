@@ -281,7 +281,13 @@
 
   .sidebar-empty { padding: 24px 20px; font-size: 13px; color: var(--ink-soft); line-height: 1.6; }
 
-  .sidebar-foot { padding: 14px 20px; border-top: 1px solid var(--line); }
+  .sidebar-foot { padding: 14px 20px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+  .add-patient-btn {
+    width: 100%; padding: 9px 14px; background: var(--accent); color: #fff;
+    border: none; border-radius: 9px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: opacity .15s;
+  }
+  .add-patient-btn:hover { opacity: .88; }
   .invite-btn {
     width: 100%;
     padding: 9px;
@@ -512,6 +518,7 @@
       <div class="sidebar-empty">Caricamento pazienti…</div>
     </div>
     <div class="sidebar-foot">
+      <button class="add-patient-btn" onclick="openAddPatientModal()">＋ Aggiungi paziente</button>
       <button class="logout-link" onclick="doLogout()">Esci</button>
     </div>
   </div>
@@ -1326,5 +1333,131 @@ async function applyParameterChanges(params, contestoRisposta) {
   }
 })();
 </script>
+<!-- ═══════════════════ MODAL AGGIUNGI PAZIENTE ═══════════════════ -->
+<div id="add-patient-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:900; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:16px; padding:32px; width:360px; max-width:90vw; box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <h3 style="margin:0 0 6px; font-size:17px; color:var(--ink);">➕ Aggiungi paziente</h3>
+    <p style="margin:0 0 20px; font-size:13px; color:var(--ink-soft); line-height:1.5;">Inserisci il codice che il paziente ha generato dalla sezione <strong>Profilo</strong> della sua app.</p>
+    <label style="display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:6px; letter-spacing:.05em;">CODICE INVITO</label>
+    <input id="add-patient-code" type="text" placeholder="es. A1B2C3D4"
+      style="width:100%; box-sizing:border-box; padding:12px 14px; border:1.5px solid var(--line); border-radius:10px; font-size:18px; font-family:'IBM Plex Mono',monospace; letter-spacing:.15em; text-transform:uppercase; outline:none; color:var(--ink);"
+      oninput="this.value=this.value.toUpperCase()"
+      onkeydown="if(event.key==='Enter') doAddPatient()">
+    <div id="add-patient-err" style="display:none; margin-top:10px; padding:10px 12px; background:#fff0f0; border-radius:8px; font-size:13px; color:#c84b31;"></div>
+    <div id="add-patient-ok" style="display:none; margin-top:10px; padding:10px 12px; background:#f0faf4; border-radius:8px; font-size:13px; color:#2a7a4f;"></div>
+    <div style="display:flex; gap:10px; margin-top:20px;">
+      <button onclick="closeAddPatientModal()" style="flex:1; padding:11px; border:1.5px solid var(--line); border-radius:10px; background:#fff; color:var(--ink-soft); font-size:14px; cursor:pointer;">Annulla</button>
+      <button onclick="doAddPatient()" id="add-patient-btn" style="flex:2; padding:11px; border:none; border-radius:10px; background:var(--accent); color:#fff; font-size:14px; font-weight:600; cursor:pointer;">Collega paziente</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Aggiungi paziente via codice invito ──────────────────────────────────
+function openAddPatientModal() {
+  document.getElementById('add-patient-code').value = '';
+  document.getElementById('add-patient-err').style.display = 'none';
+  document.getElementById('add-patient-ok').style.display = 'none';
+  const btn = document.getElementById('add-patient-btn');
+  btn.disabled = false;
+  btn.textContent = 'Collega paziente';
+  const overlay = document.getElementById('add-patient-overlay');
+  overlay.style.display = 'flex';
+  setTimeout(() => document.getElementById('add-patient-code').focus(), 100);
+}
+
+function closeAddPatientModal() {
+  document.getElementById('add-patient-overlay').style.display = 'none';
+}
+
+async function doAddPatient() {
+  const codice = document.getElementById('add-patient-code').value.trim().toUpperCase();
+  const errEl = document.getElementById('add-patient-err');
+  const okEl  = document.getElementById('add-patient-ok');
+  const btn   = document.getElementById('add-patient-btn');
+
+  errEl.style.display = 'none';
+  okEl.style.display  = 'none';
+
+  if (!codice || codice.length < 6) {
+    errEl.textContent = 'Inserisci un codice valido.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Verifica…';
+
+  try {
+    // 1. Cerca il codice invito
+    const { data: inviti, error: invErr } = await sb
+      .from('inviti')
+      .select('id, paziente_id, stato, scadenza')
+      .eq('codice', codice)
+      .limit(1);
+
+    if (invErr || !inviti || inviti.length === 0) {
+      throw new Error('Codice non trovato. Verifica che sia corretto.');
+    }
+
+    const invito = inviti[0];
+
+    if (invito.stato === 'usato') {
+      throw new Error('Questo codice è già stato utilizzato. Chiedi al paziente di generarne uno nuovo.');
+    }
+    if (new Date(invito.scadenza) < new Date()) {
+      throw new Error('Questo codice è scaduto. Chiedi al paziente di generarne uno nuovo dall\'app.');
+    }
+
+    // 2. Controlla se il paziente è già collegato
+    const { data: esistente } = await sb
+      .from('paziente_medico')
+      .select('id')
+      .eq('medico_id', currentMedico.id)
+      .eq('paziente_id', invito.paziente_id)
+      .eq('attivo', true)
+      .limit(1);
+
+    if (esistente && esistente.length > 0) {
+      throw new Error('Questo paziente è già collegato al tuo account.');
+    }
+
+    // 3. Crea il collegamento
+    const { error: linkErr } = await sb
+      .from('paziente_medico')
+      .insert({ medico_id: currentMedico.id, paziente_id: invito.paziente_id, attivo: true });
+
+    if (linkErr) throw new Error('Errore durante il collegamento: ' + linkErr.message);
+
+    // 4. Marca l'invito come usato
+    await sb.from('inviti').update({
+      stato: 'usato',
+      usato_da: currentMedico.user_id,
+      usato_at: new Date().toISOString()
+    }).eq('id', invito.id);
+
+    // 5. Successo — ricarica lista
+    okEl.textContent = '✅ Paziente collegato con successo!';
+    okEl.style.display = 'block';
+    btn.textContent = 'Collegato!';
+    await loadPatients();
+    setTimeout(() => closeAddPatientModal(), 1800);
+
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Collega paziente';
+  }
+}
+
+// Chiudi modal cliccando fuori
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('add-patient-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeAddPatientModal();
+  });
+});
+</script>
+
 </body>
 </html>
