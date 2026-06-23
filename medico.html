@@ -1286,17 +1286,22 @@ async function applyParameterChanges(params, contestoRisposta) {
   }
 
   // Aggiorna dosi prescritte se presenti
+  // Gestisce sia il formato con prefisso (dose_pranzo) che senza (pranzo)
   const doseFields = ['dose_colazione', 'dose_pranzo', 'dose_cena', 'dose_notte'];
-  const hasDoseChanges = doseFields.some(f => params[f] !== undefined);
+  const doseFieldsShort = ['colazione', 'pranzo', 'cena', 'notte'];
+  const hasDoseChanges = doseFields.some(f => params[f] !== undefined)
+                      || doseFieldsShort.some(f => params[f] !== undefined);
   if (hasDoseChanges) {
     const currentDose = patientData.config?.dose_per_pasto || {};
     const newDose = {
-      colazione: params.dose_colazione ?? currentDose.colazione,
-      pranzo: params.dose_pranzo ?? currentDose.pranzo,
-      cena: params.dose_cena ?? currentDose.cena,
-      notte: params.dose_notte ?? currentDose.notte,
+      colazione: params.dose_colazione ?? params.colazione ?? currentDose.colazione,
+      pranzo:    params.dose_pranzo    ?? params.pranzo    ?? currentDose.pranzo,
+      cena:      params.dose_cena      ?? params.cena      ?? currentDose.cena,
+      notte:     params.dose_notte     ?? params.notte      ?? currentDose.notte,
     };
     await sb.from('insulin_config').upsert({ user_id: activePatientId, dose_per_pasto: newDose }, { onConflict: 'user_id' });
+    // Aggiorna anche patientData locale per coerenza
+    if (patientData.config) patientData.config.dose_per_pasto = newDose;
   }
 
   // Salva la nota clinica con i parametri modificati, tracciabile dal paziente
