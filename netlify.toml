@@ -1,2 +1,5 @@
 [functions."sync-libre-scheduled"]
 schedule = "0 */2 * * *"
+
+[functions."weekly-report"]
+  schedule = "0 8 * * 0"
