@@ -13,9 +13,13 @@ exports.handler = async () => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
   // Recupera tutti i profili con email
-  const { data: profiles, error } = await supabase
-    .from('profiles')
-    .select('id, email, full_name');
+  // Legge email da auth.users tramite admin API
+  const { data: { users }, error } = await supabase.auth.admin.listUsers();
+  const profiles = (users || []).map(u => ({
+    id: u.id,
+    email: u.email,
+    nome: u.user_metadata?.nome || u.email?.split('@')[0] || 'Paziente'
+  }));
 
   if (error || !profiles?.length) {
     console.log('Nessun profilo trovato');
@@ -85,7 +89,7 @@ exports.handler = async () => {
     const avgColor = avg <= 180 ? '#22c55e' : '#ef4444';
     const ipoColor = ipo === 0 ? '#22c55e' : '#ef4444';
 
-    const nome = profile.full_name?.split(' ')[0] || 'Caro paziente';
+    const nome = profile.nome?.split(' ')[0] || 'Caro paziente';
     const dateFrom = new Date(weekAgo).toLocaleDateString('it-IT');
     const dateTo = new Date().toLocaleDateString('it-IT');
 
