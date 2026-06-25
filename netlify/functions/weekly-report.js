@@ -1,238 +1,181 @@
-// netlify/functions/weekly-report.js
-// Eseguito ogni domenica alle 8:00 via netlify.toml schedule
-// Invia riepilogo settimanale a tutti i pazienti GlucoAI
-
-const { createClient } = require('@supabase/supabase-js');
 const nodemailer = require('nodemailer');
+const { createClient } = require('@supabase/supabase-js');
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+const SUPABASE_URL = 'https://zynytvhmlnvlvswuhtse.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SMTP_PASSWORD = process.env.ARUBA_SMTP_PASSWORD;
 
-const transporter = nodemailer.createTransport({
-  host: 'smtps.aruba.it',
-  port: 465,
-  secure: true,
-  auth: {
-    user: 'info@glucoai.it',
-    pass: process.env.ARUBA_SMTP_PASSWORD,
-  },
-});
+exports.handler = async () => {
+  if (!SUPABASE_KEY || !SMTP_PASSWORD) {
+    return { statusCode: 500, body: 'Variabili mancanti' };
+  }
 
-const getColor = (val) => {
-  if (val < 70) return '#e74c3c';
-  if (val > 180) return '#e67e22';
-  return '#2ecc71';
-};
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-const tirColor = (tir) => {
-  if (tir >= 70) return '#2ecc71';
-  if (tir >= 50) return '#e67e22';
-  return '#e74c3c';
-};
+  // Recupera tutti i profili con email
+  const { data: profiles, error } = await supabase
+    .from('profiles')
+    .select('id, email, full_name');
 
-const generateEmailHTML = (nome, data) => {
-  const {
-    glicMedia, glicMin, glicMax, tir,
-    totaleMisurazioni, totaleIpo, totaleIper,
-    hba1c, mediaRapida, mediaLenta,
-    totalePasti, carboMedi
-  } = data;
+  if (error || !profiles?.length) {
+    console.log('Nessun profilo trovato');
+    return { statusCode: 200, body: 'Nessun paziente' };
+  }
 
-  return `
-<!DOCTYPE html>
+  const weekAgo = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
+
+  const transporter = nodemailer.createTransport({
+    host: 'smtps.aruba.it',
+    port: 465,
+    secure: true,
+    auth: { user: 'info@glucoai.it', pass: SMTP_PASSWORD }
+  });
+
+  let sent = 0;
+
+  for (const profile of profiles) {
+    if (!profile.email) continue;
+
+    // Glicemie settimana
+    const { data: readings } = await supabase
+      .from('readings')
+      .select('value, date')
+      .eq('user_id', profile.id)
+      .gte('date', weekAgo);
+
+    // Dati Libre
+    const { data: libreRows } = await supabase
+      .from('libre_data')
+      .select('value, date')
+      .eq('user_id', profile.id)
+      .gte('date', weekAgo);
+
+    // Pasti
+    const { data: meals } = await supabase
+      .from('meals')
+      .select('carbs, timing, date')
+      .eq('user_id', profile.id)
+      .gte('date', weekAgo);
+
+    // Insulina
+    const { data: insulin } = await supabase
+      .from('insulin')
+      .select('units, type, date')
+      .eq('user_id', profile.id)
+      .gte('date', weekAgo);
+
+    const allGlucose = [
+      ...(readings || []).map(r => r.value),
+      ...(libreRows || []).map(r => r.value)
+    ];
+
+    if (allGlucose.length === 0) continue;
+
+    const avg = Math.round(allGlucose.reduce((a, b) => a + b, 0) / allGlucose.length);
+    const tir = Math.round(allGlucose.filter(v => v >= 70 && v <= 180).length / allGlucose.length * 100);
+    const ipo = allGlucose.filter(v => v < 70).length;
+    const iper = allGlucose.filter(v => v > 180).length;
+    const minV = Math.min(...allGlucose);
+    const maxV = Math.max(...allGlucose);
+
+    const rapidCount = (insulin || []).filter(i => i.type?.toLowerCase() === 'rapida').length;
+    const totalCarbs = (meals || []).reduce((s, m) => s + (m.carbs || 0), 0);
+
+    const tirColor = tir >= 70 ? '#22c55e' : tir >= 50 ? '#f59e0b' : '#ef4444';
+    const avgColor = avg <= 180 ? '#22c55e' : '#ef4444';
+    const ipoColor = ipo === 0 ? '#22c55e' : '#ef4444';
+
+    const nome = profile.full_name?.split(' ')[0] || 'Caro paziente';
+    const dateFrom = new Date(weekAgo).toLocaleDateString('it-IT');
+    const dateTo = new Date().toLocaleDateString('it-IT');
+
+    const htmlEmail = `<!DOCTYPE html>
 <html lang="it">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Il tuo riepilogo settimanale GlucoAI</title>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<style>
+  body{font-family:-apple-system,'Segoe UI',sans-serif;background:#f0f4f8;margin:0;padding:20px;color:#1e293b}
+  .container{max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1)}
+  .header{background:linear-gradient(135deg,#E84545,#c0392b);padding:24px;text-align:center;color:#fff}
+  .header h1{margin:0;font-size:22px;font-weight:800}
+  .header p{margin:6px 0 0;opacity:.85;font-size:13px}
+  .content{padding:24px}
+  .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}
+  .stat{background:#f8fafc;border-radius:10px;padding:12px;text-align:center}
+  .stat-val{font-size:24px;font-weight:800}
+  .stat-label{font-size:10px;color:#94a3b8;text-transform:uppercase;margin-top:2px}
+  .tir-bar{background:#e2e8f0;border-radius:6px;height:12px;margin:6px 0;overflow:hidden}
+  .tir-fill{height:12px;border-radius:6px;background:${tirColor};width:${tir}%}
+  .info-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:14px}
+  .footer{background:#f8fafc;padding:16px;text-align:center;font-size:11px;color:#94a3b8}
+  p{font-size:14px;line-height:1.6;color:#475569}
+</style>
 </head>
-<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Helvetica Neue',Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 0;">
-    <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;">
-        
-        <!-- Header -->
-        <tr><td style="background:linear-gradient(135deg,#E84545,#c03333);border-radius:16px 16px 0 0;padding:32px;text-align:center;">
-          <p style="margin:0 0 8px;font-size:28px;">🩸</p>
-          <h1 style="margin:0;color:#fff;font-size:24px;font-weight:800;letter-spacing:-0.5px;">GlucoAI</h1>
-          <p style="margin:6px 0 0;color:rgba(255,255,255,0.85);font-size:14px;">Riepilogo settimanale</p>
-        </td></tr>
+<body>
+<div class="container">
+  <div class="header">
+    <h1>🩸 GlucoAI — Report Settimanale</h1>
+    <p>${dateFrom} → ${dateTo}</p>
+  </div>
+  <div class="content">
+    <p>Ciao <strong>${nome}</strong>! Ecco il riepilogo della tua settimana 👇</p>
 
-        <!-- Saluto -->
-        <tr><td style="background:#fff;padding:28px 32px 20px;">
-          <p style="margin:0;font-size:16px;color:#1a2332;">Ciao <strong>${nome}</strong> 👋</p>
-          <p style="margin:8px 0 0;font-size:14px;color:#6b7280;line-height:1.6;">
-            Ecco il riepilogo dei tuoi dati degli ultimi 7 giorni. Continua così!
-          </p>
-        </td></tr>
+    <div class="stat-grid">
+      <div class="stat">
+        <div class="stat-val" style="color:${avgColor}">${avg}</div>
+        <div class="stat-label">Media mg/dL</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" style="color:${tirColor}">${tir}%</div>
+        <div class="stat-label">Tempo in range</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val" style="color:${ipoColor}">${ipo}</div>
+        <div class="stat-label">Ipoglicemie</div>
+      </div>
+    </div>
 
-        <!-- Glicemia Stats -->
-        <tr><td style="background:#fff;padding:0 32px 20px;">
-          <h2 style="margin:0 0 16px;font-size:13px;font-weight:700;color:#9ca3af;letter-spacing:0.08em;text-transform:uppercase;">📊 Glicemia</h2>
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td width="25%" style="text-align:center;background:#f8f9fa;border-radius:12px;padding:16px 8px;">
-                <p style="margin:0;font-size:22px;font-weight:800;color:${getColor(glicMedia)};">${glicMedia}</p>
-                <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Media mg/dL</p>
-              </td>
-              <td width="4%"></td>
-              <td width="25%" style="text-align:center;background:#f8f9fa;border-radius:12px;padding:16px 8px;">
-                <p style="margin:0;font-size:22px;font-weight:800;color:${tirColor(tir)};">${tir}%</p>
-                <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">TIR 70-180</p>
-              </td>
-              <td width="4%"></td>
-              <td width="25%" style="text-align:center;background:#f8f9fa;border-radius:12px;padding:16px 8px;">
-                <p style="margin:0;font-size:22px;font-weight:800;color:#6c63ff;">${hba1c}%</p>
-                <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">HbA1c est.</p>
-              </td>
-              <td width="4%"></td>
-              <td width="17%" style="text-align:center;background:#f8f9fa;border-radius:12px;padding:16px 8px;">
-                <p style="margin:0;font-size:22px;font-weight:800;color:#1a2332;">${totaleMisurazioni}</p>
-                <p style="margin:4px 0 0;font-size:11px;color:#9ca3af;">Misurazioni</p>
-              </td>
-            </tr>
-          </table>
-          
-          <!-- Min/Max/Ipo/Iper -->
-          <table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;">
-            <tr>
-              <td width="48%" style="background:#e8faf7;border-radius:10px;padding:12px;text-align:center;">
-                <p style="margin:0;font-size:13px;color:#00b894;"><strong>Min: ${glicMin}</strong> · Max: ${glicMax} mg/dL</p>
-              </td>
-              <td width="4%"></td>
-              <td width="48%" style="background:#fff0f3;border-radius:10px;padding:12px;text-align:center;">
-                <p style="margin:0;font-size:13px;color:#e84545;"><strong>${totaleIpo} ipo</strong> · ${totaleIper} iper</p>
-              </td>
-            </tr>
-          </table>
-        </td></tr>
+    <div style="margin-bottom:16px">
+      <div style="font-size:11px;color:#94a3b8;margin-bottom:4px">Tempo in range (70–180 mg/dL)</div>
+      <div class="tir-bar"><div class="tir-fill"></div></div>
+      <div style="font-size:11px;color:#64748b">${tir}% • Obiettivo ADA: ≥70%</div>
+    </div>
 
-        <!-- Insulina -->
-        <tr><td style="background:#fff;padding:0 32px 20px;">
-          <h2 style="margin:0 0 16px;font-size:13px;font-weight:700;color:#9ca3af;letter-spacing:0.08em;text-transform:uppercase;">💉 Insulina</h2>
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td width="48%" style="text-align:center;background:#fff5f5;border-radius:12px;padding:16px;">
-                <p style="margin:0;font-size:22px;font-weight:800;color:#e84545;">${mediaRapida}U</p>
-                <p style="margin:4px 0 0;font-size:12px;color:#9ca3af;">⚡ Media Rapida</p>
-              </td>
-              <td width="4%"></td>
-              <td width="48%" style="text-align:center;background:#f5f0ff;border-radius:12px;padding:16px;">
-                <p style="margin:0;font-size:22px;font-weight:800;color:#9b59b6;">${mediaLenta}U</p>
-                <p style="margin:4px 0 0;font-size:12px;color:#9ca3af;">🌙 Media Lenta</p>
-              </td>
-            </tr>
-          </table>
-        </td></tr>
+    <div style="background:#f8fafc;border-radius:10px;padding:16px;margin:16px 0">
+      <div class="info-row"><span>📉 Minimo</span><span><strong>${minV} mg/dL</strong></span></div>
+      <div class="info-row"><span>📈 Massimo</span><span><strong>${maxV} mg/dL</strong></span></div>
+      <div class="info-row"><span>🔴 Iperglicemie (>180)</span><span><strong>${iper}</strong></span></div>
+      <div class="info-row"><span>💉 Dosi rapide</span><span><strong>${rapidCount}</strong></span></div>
+      <div class="info-row" style="border:none"><span>🍽️ Carboidrati totali</span><span><strong>${totalCarbs}g</strong></span></div>
+    </div>
 
-        <!-- Pasti -->
-        <tr><td style="background:#fff;padding:0 32px 28px;">
-          <h2 style="margin:0 0 16px;font-size:13px;font-weight:700;color:#9ca3af;letter-spacing:0.08em;text-transform:uppercase;">🍽️ Pasti</h2>
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td width="48%" style="text-align:center;background:#fff8e7;border-radius:12px;padding:16px;">
-                <p style="margin:0;font-size:22px;font-weight:800;color:#f39c12;">${totalePasti}</p>
-                <p style="margin:4px 0 0;font-size:12px;color:#9ca3af;">Pasti registrati</p>
-              </td>
-              <td width="4%"></td>
-              <td width="48%" style="text-align:center;background:#fff8e7;border-radius:12px;padding:16px;">
-                <p style="margin:0;font-size:22px;font-weight:800;color:#f39c12;">${carboMedi}g</p>
-                <p style="margin:4px 0 0;font-size:12px;color:#9ca3af;">Media carbo/pasto</p>
-              </td>
-            </tr>
-          </table>
-        </td></tr>
+    ${tir >= 70
+      ? `<p>✅ <strong>Ottimo lavoro!</strong> Il tuo tempo in range è sopra l'obiettivo del 70%. Continua così!</p>`
+      : tir >= 50
+      ? `<p>⚠️ Il tempo in range è migliorabile. Apri GlucoAI per analizzare i pasti e le dosi della settimana.</p>`
+      : `<p>🔴 Il tempo in range è sotto il 50%. Ti consigliamo di condividere questo report con il tuo diabetologo.</p>`
+    }
 
-        <!-- Footer -->
-        <tr><td style="background:#1a2332;border-radius:0 0 16px 16px;padding:24px 32px;text-align:center;">
-          <p style="margin:0 0 8px;font-size:13px;color:rgba(255,255,255,0.6);">
-            Questo report è generato automaticamente da <strong style="color:#fff;">GlucoAI</strong>
-          </p>
-          <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.35);">
-            ⚠️ I dati sono indicativi. Consulta sempre il tuo diabetologo per le decisioni terapeutiche.
-          </p>
-        </td></tr>
-
-      </table>
-    </td></tr>
-  </table>
+    <p style="font-size:12px;color:#94a3b8;margin-top:20px">⚕️ Questo report è generato automaticamente e non sostituisce il parere del medico.</p>
+  </div>
+  <div class="footer">
+    📱 GlucoAI · <a href="https://glucoai.it" style="color:#E84545;text-decoration:none">glucoai.it</a>
+  </div>
+</div>
 </body>
-</html>
-  `;
-};
+</html>`;
 
-exports.handler = async (event) => {
-  try {
-    // Leggi tutti i profili con email
-    const { data: profiles, error: profErr } = await supabase
-      .from('profiles')
-      .select('id, nome, email')
-      .not('email', 'is', null);
+    await transporter.sendMail({
+      from: '"GlucoAI" <info@glucoai.it>',
+      to: profile.email,
+      subject: `🩸 Il tuo report GlucoAI — TIR ${tir}% questa settimana`,
+      html: htmlEmail
+    });
 
-    if (profErr || !profiles?.length) {
-      return { statusCode: 200, body: 'Nessun profilo trovato' };
-    }
-
-    const dal7 = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-    let inviati = 0;
-
-    for (const profile of profiles) {
-      try {
-        const userId = profile.id;
-
-        // Letture glicemiche
-        const { data: readings } = await supabase
-          .from('readings').select('value').eq('user_id', userId).gte('date', dal7);
-
-        if (!readings?.length) continue; // Salta se non ha dati
-
-        const valori = readings.map(r => r.value);
-        const glicMedia = Math.round(valori.reduce((a, b) => a + b, 0) / valori.length);
-        const glicMin = Math.min(...valori);
-        const glicMax = Math.max(...valori);
-        const inTarget = valori.filter(v => v >= 70 && v <= 180).length;
-        const tir = Math.round((inTarget / valori.length) * 100);
-        const totaleIpo = valori.filter(v => v < 70).length;
-        const totaleIper = valori.filter(v => v > 180).length;
-        const hba1c = ((glicMedia + 46.7) / 28.7).toFixed(1);
-
-        // Insulina
-        const { data: insuline } = await supabase
-          .from('insulin').select('units, type').eq('user_id', userId).gte('date', dal7);
-        const rapide = insuline?.filter(i => i.type?.toLowerCase().includes('rapida')) || [];
-        const lente = insuline?.filter(i => i.type?.toLowerCase().includes('lenta')) || [];
-        const mediaRapida = rapide.length ? Math.round(rapide.reduce((a, b) => a + b.units, 0) / rapide.length) : 0;
-        const mediaLenta = lente.length ? Math.round(lente.reduce((a, b) => a + b.units, 0) / lente.length) : 0;
-
-        // Pasti
-        const { data: pasti } = await supabase
-          .from('meals').select('carbs').eq('user_id', userId).gte('date', dal7);
-        const totalePasti = pasti?.length || 0;
-        const carboMedi = totalePasti ? Math.round(pasti.reduce((a, b) => a + (b.carbs || 0), 0) / totalePasti) : 0;
-
-        const html = generateEmailHTML(profile.nome || 'paziente', {
-          glicMedia, glicMin, glicMax, tir,
-          totaleMisurazioni: valori.length, totaleIpo, totaleIper,
-          hba1c, mediaRapida, mediaLenta, totalePasti, carboMedi
-        });
-
-        await transporter.sendMail({
-          from: '"GlucoAI" <info@glucoai.it>',
-          to: profile.email,
-          subject: `📊 Il tuo riepilogo settimanale GlucoAI — TIR ${tir}%`,
-          html,
-        });
-
-        inviati++;
-      } catch (e) {
-        console.error(`Errore per ${profile.email}:`, e.message);
-      }
-    }
-
-    return { statusCode: 200, body: `Report inviati: ${inviati}` };
-  } catch (e) {
-    return { statusCode: 500, body: e.message };
+    sent++;
+    console.log(`✅ Email inviata a ${profile.email}`);
   }
+
+  return { statusCode: 200, body: `Email inviate: ${sent}` };
 };
