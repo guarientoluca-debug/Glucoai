@@ -5,25 +5,27 @@ const SUPABASE_URL = 'https://zynytvhmlnvlvswuhtse.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const SMTP_PASSWORD = process.env.ARUBA_SMTP_PASSWORD;
 
-exports.handler = async () => {
+exports.handler = async (event) => {
   if (!SUPABASE_KEY || !SMTP_PASSWORD) {
-    return { statusCode: 500, body: 'Variabili mancanti' };
+    return { statusCode: 500, body: `Variabili mancanti: KEY=${!!SUPABASE_KEY} SMTP=${!!SMTP_PASSWORD}` };
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
 
-  // Recupera tutti i profili con email
-  // Legge email da auth.users tramite admin API
-  const { data: { users }, error } = await supabase.auth.admin.listUsers();
-  const profiles = (users || []).map(u => ({
-    id: u.id,
-    email: u.email,
-    nome: u.user_metadata?.nome || u.email?.split('@')[0] || 'Paziente'
-  }));
+  // Legge da profiles che ha id, email, nome
+  const { data: profiles, error } = await supabase
+    .from('profiles')
+    .select('id, email, nome')
+    .not('email', 'is', null);
 
-  if (error || !profiles?.length) {
-    console.log('Nessun profilo trovato');
-    return { statusCode: 200, body: 'Nessun paziente' };
+  if (error) {
+    return { statusCode: 500, body: `Errore Supabase: ${error.message}` };
+  }
+
+  if (!profiles?.length) {
+    return { statusCode: 200, body: 'Nessun profilo con email' };
   }
 
   const weekAgo = new Date(Date.now() - 7 * 24 * 3600000).toISOString();
@@ -40,33 +42,10 @@ exports.handler = async () => {
   for (const profile of profiles) {
     if (!profile.email) continue;
 
-    // Glicemie settimana
-    const { data: readings } = await supabase
-      .from('readings')
-      .select('value, date')
-      .eq('user_id', profile.id)
-      .gte('date', weekAgo);
-
-    // Dati Libre
-    const { data: libreRows } = await supabase
-      .from('libre_data')
-      .select('value, date')
-      .eq('user_id', profile.id)
-      .gte('date', weekAgo);
-
-    // Pasti
-    const { data: meals } = await supabase
-      .from('meals')
-      .select('carbs, timing, date')
-      .eq('user_id', profile.id)
-      .gte('date', weekAgo);
-
-    // Insulina
-    const { data: insulin } = await supabase
-      .from('insulin')
-      .select('units, type, date')
-      .eq('user_id', profile.id)
-      .gte('date', weekAgo);
+    const { data: readings } = await supabase.from('readings').select('value, date').eq('user_id', profile.id).gte('date', weekAgo);
+    const { data: libreRows } = await supabase.from('libre_data').select('value, date').eq('user_id', profile.id).gte('date', weekAgo);
+    const { data: meals } = await supabase.from('meals').select('carbs, timing, date').eq('user_id', profile.id).gte('date', weekAgo);
+    const { data: insulin } = await supabase.from('insulin').select('units, type, date').eq('user_id', profile.id).gte('date', weekAgo);
 
     const allGlucose = [
       ...(readings || []).map(r => r.value),
@@ -81,15 +60,11 @@ exports.handler = async () => {
     const iper = allGlucose.filter(v => v > 180).length;
     const minV = Math.min(...allGlucose);
     const maxV = Math.max(...allGlucose);
-
     const rapidCount = (insulin || []).filter(i => i.type?.toLowerCase() === 'rapida').length;
     const totalCarbs = (meals || []).reduce((s, m) => s + (m.carbs || 0), 0);
 
     const tirColor = tir >= 70 ? '#22c55e' : tir >= 50 ? '#f59e0b' : '#ef4444';
-    const avgColor = avg <= 180 ? '#22c55e' : '#ef4444';
-    const ipoColor = ipo === 0 ? '#22c55e' : '#ef4444';
-
-    const nome = profile.nome?.split(' ')[0] || 'Caro paziente';
+    const nome = profile.nome?.split(' ')[0] || 'Paziente';
     const dateFrom = new Date(weekAgo).toLocaleDateString('it-IT');
     const dateTo = new Date().toLocaleDateString('it-IT');
 
@@ -124,28 +99,16 @@ exports.handler = async () => {
   </div>
   <div class="content">
     <p>Ciao <strong>${nome}</strong>! Ecco il riepilogo della tua settimana 👇</p>
-
     <div class="stat-grid">
-      <div class="stat">
-        <div class="stat-val" style="color:${avgColor}">${avg}</div>
-        <div class="stat-label">Media mg/dL</div>
-      </div>
-      <div class="stat">
-        <div class="stat-val" style="color:${tirColor}">${tir}%</div>
-        <div class="stat-label">Tempo in range</div>
-      </div>
-      <div class="stat">
-        <div class="stat-val" style="color:${ipoColor}">${ipo}</div>
-        <div class="stat-label">Ipoglicemie</div>
-      </div>
+      <div class="stat"><div class="stat-val" style="color:${avg<=180?'#22c55e':'#ef4444'}">${avg}</div><div class="stat-label">Media mg/dL</div></div>
+      <div class="stat"><div class="stat-val" style="color:${tirColor}">${tir}%</div><div class="stat-label">Tempo in range</div></div>
+      <div class="stat"><div class="stat-val" style="color:${ipo===0?'#22c55e':'#ef4444'}">${ipo}</div><div class="stat-label">Ipoglicemie</div></div>
     </div>
-
     <div style="margin-bottom:16px">
       <div style="font-size:11px;color:#94a3b8;margin-bottom:4px">Tempo in range (70–180 mg/dL)</div>
       <div class="tir-bar"><div class="tir-fill"></div></div>
       <div style="font-size:11px;color:#64748b">${tir}% • Obiettivo ADA: ≥70%</div>
     </div>
-
     <div style="background:#f8fafc;border-radius:10px;padding:16px;margin:16px 0">
       <div class="info-row"><span>📉 Minimo</span><span><strong>${minV} mg/dL</strong></span></div>
       <div class="info-row"><span>📈 Massimo</span><span><strong>${maxV} mg/dL</strong></span></div>
@@ -153,19 +116,12 @@ exports.handler = async () => {
       <div class="info-row"><span>💉 Dosi rapide</span><span><strong>${rapidCount}</strong></span></div>
       <div class="info-row" style="border:none"><span>🍽️ Carboidrati totali</span><span><strong>${totalCarbs}g</strong></span></div>
     </div>
-
-    ${tir >= 70
-      ? `<p>✅ <strong>Ottimo lavoro!</strong> Il tuo tempo in range è sopra l'obiettivo del 70%. Continua così!</p>`
-      : tir >= 50
-      ? `<p>⚠️ Il tempo in range è migliorabile. Apri GlucoAI per analizzare i pasti e le dosi della settimana.</p>`
-      : `<p>🔴 Il tempo in range è sotto il 50%. Ti consigliamo di condividere questo report con il tuo diabetologo.</p>`
-    }
-
+    ${tir >= 70 ? `<p>✅ <strong>Ottimo lavoro!</strong> Il tuo tempo in range è sopra l'obiettivo del 70%!</p>`
+      : tir >= 50 ? `<p>⚠️ Il tempo in range è migliorabile. Apri GlucoAI per analizzare pasti e dosi.</p>`
+      : `<p>🔴 Il tempo in range è sotto il 50%. Ti consigliamo di condividere questo report con il tuo diabetologo.</p>`}
     <p style="font-size:12px;color:#94a3b8;margin-top:20px">⚕️ Questo report è generato automaticamente e non sostituisce il parere del medico.</p>
   </div>
-  <div class="footer">
-    📱 GlucoAI · <a href="https://glucoai.it" style="color:#E84545;text-decoration:none">glucoai.it</a>
-  </div>
+  <div class="footer">📱 GlucoAI · <a href="https://glucoai.it" style="color:#E84545;text-decoration:none">glucoai.it</a></div>
 </div>
 </body>
 </html>`;
@@ -178,8 +134,7 @@ exports.handler = async () => {
     });
 
     sent++;
-    console.log(`✅ Email inviata a ${profile.email}`);
   }
 
-  return { statusCode: 200, body: `Email inviate: ${sent}` };
+  return { statusCode: 200, body: `Email inviate: ${sent} su ${profiles.length} pazienti` };
 };
