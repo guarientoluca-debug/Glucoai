@@ -121,7 +121,7 @@ exports.handler = async function(event, context) {
       .limit(1);
 
     const lastTimestamp = existing?.[0]?.date ? new Date(existing[0].date).getTime() : 0;
-    const INTERVAL_MS = 150 * 60 * 1000;
+    const INTERVAL_MS = 10 * 60 * 1000; // 10 min spacing anti-duplicato
     let lastTime = lastTimestamp;
     const toInsert = [];
 
