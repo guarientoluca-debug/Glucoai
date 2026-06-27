@@ -3,3 +3,6 @@ schedule = "0 */2 * * *"
 
 [functions."weekly-report"]
   schedule = "0 8 * * 0"
+
+[functions."weekly-dose-suggestion"]
+  schedule = "0 9 * * 0"
