@@ -125,14 +125,16 @@ async function processPatient(sb, patientId) {
   }
 
   const since = new Date(Date.now() - LOOKBACK_DAYS * 86400000).toISOString();
-  const [mealsRes, readingsRes, activitiesRes] = await Promise.all([
+  const [mealsRes, readingsRes, libreRes, activitiesRes] = await Promise.all([
     sb.from('meals').select('id, date, timing, carbs').eq('user_id', patientId).gte('date', since),
     sb.from('readings').select('date, value').eq('user_id', patientId).gte('date', since),
+    sb.from('libre_data').select('date, value').eq('user_id', patientId).gte('date', since),
     sb.from('activities').select('date, riduzione_dose_percentuale').eq('user_id', patientId).gte('date', since),
   ]);
 
   const meals = mealsRes.data || [];
-  const readings = readingsRes.data || [];
+  // readings + libre_data unite: per il post-prandiale servono entrambe
+  const readings = [...(readingsRes.data || []), ...(libreRes.data || [])];
   const activities = activitiesRes.data || [];
 
   const results = {};

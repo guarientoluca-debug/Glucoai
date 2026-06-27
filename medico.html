@@ -845,8 +845,9 @@ async function selectPatient(patientId) {
 async function loadPatientData(patientId) {
   const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(); // 60gg di storico
 
-  const [readingsRes, insulinRes, mealsRes, activitiesRes, configRes, profileRes] = await Promise.all([
+  const [readingsRes, libreRes, insulinRes, mealsRes, activitiesRes, configRes, profileRes] = await Promise.all([
     sb.from('readings').select('*').eq('user_id', patientId).gte('date', since).order('date', { ascending: true }),
+    sb.from('libre_data').select('*').eq('user_id', patientId).gte('date', since).order('date', { ascending: true }),
     sb.from('insulin').select('*').eq('user_id', patientId).gte('date', since).order('date', { ascending: true }),
     sb.from('meals').select('*').eq('user_id', patientId).gte('date', since).order('date', { ascending: true }),
     sb.from('activities').select('*').eq('user_id', patientId).gte('date', since).order('date', { ascending: true }),
@@ -854,8 +855,14 @@ async function loadPatientData(patientId) {
     sb.from('profiles').select('*').eq('id', patientId).single(),
   ]);
 
+  // Unione readings + libre_data (la sorgente Libre vera del paziente)
+  const readingsMerged = [
+    ...(readingsRes.data || []),
+    ...(libreRes.data || []).map(r => ({ ...r, source: r.source || 'libre' })),
+  ].sort((a, b) => new Date(a.date) - new Date(b.date));
+
   patientData = {
-    readings: readingsRes.data || [],
+    readings: readingsMerged,
     insulin: insulinRes.data || [],
     meals: mealsRes.data || [],
     activities: activitiesRes.data || [],
