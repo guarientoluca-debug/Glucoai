@@ -81,6 +81,7 @@ async function syncUser(supabase, user_id, email, password) {
     const graphData = graphRes.data?.data?.graphData || graphRes.data?.graphData || [];
     if (!Array.isArray(graphData) || graphData.length === 0) return { user_id, success: true, added: 0 };
 
+    // Ultima lettura gia' salvata: prendiamo tutto cio' che e' piu' recente
     const { data: existing } = await supabase
       .from('libre_data')
       .select('date')
@@ -89,24 +90,32 @@ async function syncUser(supabase, user_id, email, password) {
       .limit(1);
 
     const lastTimestamp = existing?.[0]?.date ? new Date(existing[0].date).getTime() : 0;
-    const INTERVAL_MS = 110 * 60 * 1000; // ~2 ore
-    let lastTime = lastTimestamp;
-    const toInsert = [];
 
-    for (const g of graphData) {
-      const ts = g.Timestamp || g.timestamp || g.FactoryTimestamp;
-      if (!ts) continue;
-      const dt = new Date(ts);
-      if (isNaN(dt.getTime())) continue;
-      const val = parseInt(g.Value || g.value);
-      if (!val || val < 30 || val > 500) continue;
-      if (dt.getTime() - lastTime < INTERVAL_MS) continue;
-      toInsert.push({ id: dt.getTime(), user_id, value: val, date: dt.toISOString() });
-      lastTime = dt.getTime();
+    // Dedup minimo: salviamo letture con almeno 10 minuti tra loro per evitare
+    // duplicati dell'API (LLU di solito espone una lettura ogni 15 min).
+    const MIN_SPACING_MS = 10 * 60 * 1000;
+    let lastKept = lastTimestamp;
+    const toInsert = [];
+    const seenIds = new Set();
+
+    // Ordino in ordine crescente per spaziare correttamente
+    const sorted = graphData
+      .map(g => ({ g, t: new Date(g.Timestamp || g.timestamp || g.FactoryTimestamp).getTime(), v: parseInt(g.Value || g.value) }))
+      .filter(x => !isNaN(x.t) && x.v && x.v >= 30 && x.v <= 500)
+      .sort((a, b) => a.t - b.t);
+
+    for (const { t, v } of sorted) {
+      if (t <= lastTimestamp) continue;          // gia' in DB
+      if (t - lastKept < MIN_SPACING_MS) continue; // troppo vicina a una appena tenuta
+      if (seenIds.has(t)) continue;              // duplicato esatto
+      seenIds.add(t);
+      toInsert.push({ id: t, user_id, value: v, date: new Date(t).toISOString() });
+      lastKept = t;
     }
 
     if (toInsert.length > 0) {
-      const { error } = await supabase.from('libre_data').insert(toInsert);
+      // upsert su id per essere idempotenti se la function gira due volte
+      const { error } = await supabase.from('libre_data').upsert(toInsert, { onConflict: 'id' });
       if (error) return { user_id, success: false, error: error.message };
     }
 
@@ -119,14 +128,11 @@ async function syncUser(supabase, user_id, email, password) {
   }
 }
 
-// Netlify Scheduled Function — eseguita ogni 4 ore
-// netlify.toml: [functions."sync-libre-scheduled"] schedule = "0 */4 * * *"
 exports.handler = async function(event, context) {
   console.log('🔄 Avvio sync Libre schedulato:', new Date().toISOString());
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-  // Leggi tutti gli utenti con credenziali LibreLink
   const { data: configs, error } = await supabase
     .from('libre_config')
     .select('user_id, libre_email, libre_password')
