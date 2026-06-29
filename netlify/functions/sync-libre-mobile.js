@@ -137,7 +137,7 @@ exports.handler = async function(event, context) {
         id: dt.getTime(),
         user_id,
         value: val,
-        date: dt.toISOString(),
+        date: toUTC(dt).toISOString(),
       });
       lastTime = dt.getTime();
     }

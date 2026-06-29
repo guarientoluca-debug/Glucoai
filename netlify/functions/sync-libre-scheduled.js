@@ -45,6 +45,25 @@ function request(hostname, path, method, extraHeaders, body) {
   });
 }
 
+
+// LibreLinkUp restituisce timestamp in ora locale (Europe/Rome).
+// Node.js su Netlify (UTC) li interpreta come UTC -> +2h di errore.
+// Correggiamo sottraendo l'offset CET(+1) o CEST(+2).
+function isCEST(d) {
+  const y = d.getUTCFullYear();
+  const marchLast = new Date(Date.UTC(y, 2, 31));
+  while (marchLast.getUTCDay() !== 0) marchLast.setUTCDate(marchLast.getUTCDate() - 1);
+  marchLast.setUTCHours(1); // transizione alle 01:00 UTC
+  const octLast = new Date(Date.UTC(y, 9, 31));
+  while (octLast.getUTCDay() !== 0) octLast.setUTCDate(octLast.getUTCDate() - 1);
+  octLast.setUTCHours(1);
+  return d >= marchLast && d < octLast;
+}
+function toUTC(localDate) {
+  const offsetH = isCEST(localDate) ? 2 : 1;
+  return new Date(localDate.getTime() - offsetH * 3600000);
+}
+
 async function syncUser(supabase, user_id, email, password) {
   try {
     let REGION = '';
