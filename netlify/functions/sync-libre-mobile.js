@@ -159,7 +159,7 @@ exports.handler = async function(event, context) {
     }
 
     if (toInsert.length > 0) {
-      const { error } = await supabase.from('libre_data').insert(toInsert);
+      const { error } = await supabase.from('libre_data').upsert(toInsert, { onConflict: 'id' });
       if (error) throw new Error(error.message);
     }
 
