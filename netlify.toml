@@ -1,7 +1,7 @@
 [functions."sync-libre-scheduled"]
 schedule = "0 */2 * * *"
 
-[functions."weekly-report"]
+[functions."weekly-report-background"]
   schedule = "0 8 * * 0"
 
 [functions."weekly-dose-suggestion"]

@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>GlucoAI — Portale Medico</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+
+  :root {
+    --bg: #FAFBFC;
+    --surface: #FFFFFF;
+    --ink: #1A2332;
+    --ink-soft: #5B6776;
+    --line: #E2E6EB;
+    --accent: #2563A8;
+    --accent-soft: #EAF1F8;
+    --critical: #C84B31;
+    --critical-soft: #FBEEEA;
+    --ok: #3D8B5F;
+    --ok-soft: #EBF5EF;
+    --warn: #C8932F;
+    --warn-soft: #FBF3E5;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'IBM Plex Sans', sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+  a { color: inherit; }
+  button { font-family: inherit; }
+
+  /* ───────────────────────── LOGIN / REGISTRAZIONE ───────────────────────── */
+  #auth-screen {
+    min-height: 100vh;
+    display: flex;
+  }
+  .auth-side {
+    flex: 1;
+    background: linear-gradient(160deg, #14253D 0%, #1F3A5F 55%, #2563A8 100%);
+    color: #fff;
+    padding: 56px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+  }
+  .auth-side::after {
+    content: '';
+    position: absolute;
+    right: -120px;
+    top: 30%;
+    width: 420px;
+    height: 420px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .auth-side::before {
+    content: '';
+    position: absolute;
+    right: -40px;
+    top: 38%;
+    width: 280px;
+    height: 280px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .auth-brand { display: flex; align-items: center; gap: 12px; }
+  .auth-brand-mark {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.12);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+  }
+  .auth-brand-name { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
+  .auth-brand-sub { font-size: 11px; color: rgba(255,255,255,0.6); letter-spacing: 0.08em; text-transform: uppercase; margin-top: 1px; }
+
+  .auth-headline { max-width: 420px; position: relative; z-index: 1; }
+  .auth-headline h1 {
+    font-size: 34px;
+    line-height: 1.18;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    margin: 0 0 16px;
+  }
+  .auth-headline p {
+    font-size: 15px;
+    line-height: 1.6;
+    color: rgba(255,255,255,0.72);
+    margin: 0;
+  }
+  .auth-foot { font-size: 12px; color: rgba(255,255,255,0.45); position: relative; z-index: 1; }
+
+  .auth-form-wrap {
+    width: 460px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+  }
+  .auth-form {
+    width: 100%;
+    max-width: 360px;
+  }
+  .auth-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 28px;
+    border-bottom: 1px solid var(--line);
+  }
+  .auth-tab {
+    flex: 1;
+    padding: 0 0 12px;
+    border: none;
+    background: none;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color .15s;
+  }
+  .auth-tab.active { color: var(--ink); border-bottom-color: var(--accent); }
+
+  .field-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    display: block;
+    margin: 16px 0 6px;
+  }
+  .field-label:first-child { margin-top: 0; }
+  .field-input {
+    width: 100%;
+    padding: 11px 13px;
+    border: 1.5px solid var(--line);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--ink);
+    outline: none;
+    transition: border-color .15s;
+    background: var(--surface);
+  }
+  .field-input:focus { border-color: var(--accent); }
+  .field-input.code { font-family: 'IBM Plex Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; }
+  .field-hint { font-size: 12px; color: var(--ink-soft); margin-top: 6px; line-height: 1.5; }
+
+  .btn-primary {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    margin-top: 22px;
+    transition: background .15s;
+  }
+  .btn-primary:hover { background: #1E5490; }
+  .btn-primary:disabled { background: #B7C3D1; cursor: not-allowed; }
+
+  .auth-error {
+    background: var(--critical-soft);
+    color: var(--critical);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin-top: 16px;
+    display: none;
+  }
+  .auth-error.show { display: block; }
+  .auth-success {
+    background: var(--ok-soft);
+    color: var(--ok);
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin-top: 16px;
+    display: none;
+  }
+  .auth-success.show { display: block; }
+
+  /* ───────────────────────── APP SHELL ───────────────────────── */
+  #app-shell { display: none; min-height: 100vh; }
+  #app-shell.show { display: flex; }
+
+  .sidebar {
+    width: 280px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--line);
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+  }
+  .sidebar-head {
+    padding: 22px 20px 18px;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .sidebar-head-mark {
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+  }
+  .sidebar-head-name { font-weight: 700; font-size: 14.5px; }
+  .sidebar-head-role { font-size: 11.5px; color: var(--ink-soft); }
+
+  .sidebar-section-label {
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    padding: 18px 20px 8px;
+  }
+  .patient-list { flex: 1; overflow-y: auto; padding: 0 10px; }
+  .patient-card {
+    width: 100%;
+    text-align: left;
+    border: none;
+    background: none;
+    padding: 11px 10px;
+    border-radius: 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 2px;
+    transition: background .12s;
+  }
+  .patient-card:hover { background: #F2F4F7; }
+  .patient-card.active { background: var(--accent-soft); }
+  .patient-avatar {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: #E2E6EB;
+    color: var(--ink-soft);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+  .patient-card.active .patient-avatar { background: var(--accent); color: #fff; }
+  .patient-info { min-width: 0; flex: 1; }
+  .patient-name { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .patient-meta { font-size: 11.5px; color: var(--ink-soft); }
+  .patient-flag {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .patient-flag.ok { background: var(--ok); }
+  .patient-flag.warn { background: var(--warn); }
+  .patient-flag.critical { background: var(--critical); }
+
+  .sidebar-empty { padding: 24px 20px; font-size: 13px; color: var(--ink-soft); line-height: 1.6; }
+
+  .sidebar-foot { padding: 14px 20px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+  .add-patient-btn {
+    width: 100%; padding: 9px 14px; background: var(--accent); color: #fff;
+    border: none; border-radius: 9px; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: opacity .15s;
+  }
+  .add-patient-btn:hover { opacity: .88; }
+  .invite-btn {
+    width: 100%;
+    padding: 9px;
+    border: 1.5px dashed var(--line);
+    border-radius: 8px;
+    background: none;
+    font-family: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--accent);
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  .logout-link {
+    display: block;
+    text-align: center;
+    font-size: 12px;
+    color: var(--ink-soft);
+    cursor: pointer;
+    padding: 4px;
+  }
+
+  .main { flex: 1; min-width: 0; overflow-y: auto; height: 100vh; }
+  .main-empty {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    color: var(--ink-soft);
+    gap: 8px;
+  }
+  .main-empty-mark { font-size: 36px; opacity: .3; }
+
+  /* ───────────────────────── DASHBOARD ───────────────────────── */
+  .dash { max-width: 1180px; margin: 0 auto; padding: 32px 40px 80px; }
+
+  .dash-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 28px;
+  }
+  .dash-header h2 { font-size: 22px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .dash-header-sub { font-size: 13px; color: var(--ink-soft); }
+  .dash-tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .dash-tab {
+    border: none; background: none; padding: 7px 14px; border-radius: 7px;
+    font-family: inherit; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); cursor: pointer;
+  }
+  .dash-tab.active { background: var(--accent); color: #fff; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .kpi-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .kpi-label { font-size: 11px; font-weight: 600; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; }
+  .kpi-value { font-size: 26px; font-weight: 700; letter-spacing: -0.01em; }
+  .kpi-value.ok { color: var(--ok); }
+  .kpi-value.warn { color: var(--warn); }
+  .kpi-value.critical { color: var(--critical); }
+  .kpi-unit { font-size: 13px; font-weight: 500; color: var(--ink-soft); margin-left: 3px; }
+  .kpi-sub { font-size: 11.5px; color: var(--ink-soft); margin-top: 4px; }
+
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 22px; margin-bottom: 20px; }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .panel-title { font-size: 14.5px; font-weight: 700; }
+  .panel-title-sub { font-size: 12px; color: var(--ink-soft); font-weight: 400; margin-top: 2px; }
+  .range-pills { display: flex; gap: 6px; }
+  .range-pill {
+    border: 1px solid var(--line); background: var(--surface); padding: 5px 11px; border-radius: 7px;
+    font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); cursor: pointer;
+  }
+  .range-pill.active { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+
+  .chart-wrap { position: relative; height: 260px; }
+  .chart-wrap.small { height: 190px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px; align-items: start; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+
+  .tir-bar { height: 28px; border-radius: 7px; overflow: hidden; display: flex; margin-bottom: 10px; }
+  .tir-seg { height: 100%; }
+  .tir-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--ink-soft); }
+  .tir-legend-item { display: flex; align-items: center; gap: 6px; }
+  .tir-dot { width: 8px; height: 8px; border-radius: 50%; }
+
+  .stat-mini { display: flex; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+  .stat-mini-value { font-size: 19px; font-weight: 700; }
+  .stat-mini-label { font-size: 12px; color: var(--ink-soft); }
+
+  .pattern-item { padding: 13px 14px; border-radius: 10px; margin-bottom: 8px; border-left: 3px solid var(--line); background: #FAFBFC; }
+  .pattern-item.positivo { border-left-color: var(--ok); background: var(--ok-soft); }
+  .pattern-item.attenzione { border-left-color: var(--warn); background: var(--warn-soft); }
+  .pattern-item.critico { border-left-color: var(--critical); background: var(--critical-soft); }
+  .pattern-meal { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; margin-bottom: 3px; }
+  .pattern-text { font-size: 13px; line-height: 1.5; color: var(--ink); }
+
+  .note-item { padding: 14px; border-radius: 10px; background: #FAFBFC; border: 1px solid var(--line); margin-bottom: 10px; }
+  .note-meta { font-size: 11px; color: var(--ink-soft); margin-bottom: 6px; }
+  .note-text { font-size: 13px; line-height: 1.5; }
+  .note-params { display: inline-flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+  .note-param-pill { font-size: 11px; background: var(--accent-soft); color: var(--accent); padding: 3px 8px; border-radius: 6px; font-weight: 600; }
+
+  .note-compose { display: flex; gap: 8px; margin-top: 12px; }
+  .note-compose textarea {
+    flex: 1; border: 1.5px solid var(--line); border-radius: 8px; padding: 10px 12px;
+    font-family: inherit; font-size: 13px; resize: none; min-height: 44px; outline: none;
+  }
+  .note-compose textarea:focus { border-color: var(--accent); }
+  .note-send-btn {
+    border: none; background: var(--accent); color: #fff; border-radius: 8px; padding: 0 18px;
+    font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .note-send-btn:disabled { background: #B7C3D1; }
+  .push-toggle { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-soft); margin-top: 6px; cursor: pointer; }
+  .push-toggle input { cursor: pointer; accent-color: var(--accent); }
+
+  .empty-state { text-align: center; padding: 32px 16px; color: var(--ink-soft); font-size: 13px; }
+
+  /* Chatbot */
+  .chatbot-fab {
+    position: fixed; bottom: 28px; right: 28px;
+    width: 56px; height: 56px; border-radius: 50%;
+    background: var(--accent); color: #fff; border: none;
+    box-shadow: 0 6px 20px rgba(37,99,168,0.35);
+    font-size: 22px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 50;
+  }
+  .chatbot-panel {
+    position: fixed; bottom: 96px; right: 28px;
+    width: 380px; height: 540px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.16);
+    display: none; flex-direction: column; overflow: hidden;
+    z-index: 50;
+  }
+  .chatbot-panel.show { display: flex; }
+  .chatbot-head { padding: 16px 18px; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; }
+  .chatbot-head-title { font-size: 13.5px; font-weight: 700; }
+  .chatbot-head-sub { font-size: 11px; color: var(--ink-soft); }
+  .chatbot-close { border: none; background: none; cursor: pointer; color: var(--ink-soft); font-size: 16px; }
+  .chatbot-msgs { flex: 1; overflow-y: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .chat-msg { max-width: 86%; padding: 9px 12px; border-radius: 12px; font-size: 13px; line-height: 1.5; }
+  .chat-msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 3px; }
+  .chat-msg.assistant { align-self: flex-start; background: #F2F4F7; color: var(--ink); border-bottom-left-radius: 3px; }
+  .chat-msg.applying { font-size: 11.5px; color: var(--accent); font-style: italic; }
+  .chatbot-input-row { padding: 12px; border-top: 1px solid var(--line); display: flex; gap: 8px; }
+  .chatbot-input-row input {
+    flex: 1; border: 1.5px solid var(--line); border-radius: 8px; padding: 9px 11px;
+    font-family: inherit; font-size: 13px; outline: none;
+  }
+  .chatbot-input-row input:focus { border-color: var(--accent); }
+  .chatbot-send {
+    border: none; background: var(--accent); color: #fff; border-radius: 8px; width: 36px;
+    cursor: pointer; font-size: 14px;
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════ AUTH SCREEN ═══════════════════ -->
+<div id="auth-screen">
+  <div class="auth-side">
+    <div class="auth-brand">
+      <div class="auth-brand-mark">🩺</div>
+      <div>
+        <div class="auth-brand-name">GlucoAI</div>
+        <div class="auth-brand-sub">Portale Medico</div>
+      </div>
+    </div>
+    <div class="auth-headline">
+      <h1>I dati dei tuoi pazienti,<br/>letti come una cartella clinica.</h1>
+      <p>Glicemia, dosi di insulina, carboidrati e attività fisica in un'unica timeline. Lascia note che si traducono direttamente in parametri aggiornati per il paziente.</p>
+    </div>
+    <div class="auth-foot">GlucoAI · Portale per professionisti sanitari</div>
+  </div>
+
+  <div class="auth-form-wrap">
+    <div class="auth-form">
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tab-login" onclick="switchAuthTab('login')">Accedi</button>
+        <button class="auth-tab" id="tab-register" onclick="switchAuthTab('register')">Registrati con codice</button>
+      </div>
+
+      <!-- LOGIN -->
+      <div id="form-login">
+        <label class="field-label">Email</label>
+        <input type="email" class="field-input" id="login-email" placeholder="nome@esempio.it" autocomplete="email"/>
+        <label class="field-label">Password</label>
+        <input type="password" class="field-input" id="login-password" placeholder="••••••••" autocomplete="current-password"/>
+        <button class="btn-primary" id="login-btn" onclick="doLogin()">Accedi al portale</button>
+        <div class="auth-error" id="login-error"></div>
+      </div>
+
+      <!-- REGISTRAZIONE -->
+      <div id="form-register" style="display:none">
+        <label class="field-label">Codice invito</label>
+        <input type="text" class="field-input code" id="reg-code" placeholder="ES. A1B2C3D4" maxlength="8"/>
+        <div class="field-hint">Ricevi questo codice dal tuo paziente, dalla sezione Profilo della sua app.</div>
+
+        <label class="field-label">Nome e cognome</label>
+        <input type="text" class="field-input" id="reg-nome" placeholder="Dr.ssa Maria Rossi"/>
+        <label class="field-label">Specializzazione (opzionale)</label>
+        <input type="text" class="field-input" id="reg-spec" placeholder="Diabetologia"/>
+        <label class="field-label">Email</label>
+        <input type="email" class="field-input" id="reg-email" placeholder="nome@esempio.it" autocomplete="email"/>
+        <label class="field-label">Password</label>
+        <input type="password" class="field-input" id="reg-password" placeholder="Almeno 6 caratteri" autocomplete="new-password"/>
+
+        <button class="btn-primary" id="reg-btn" onclick="doRegister()">Crea account e collegati</button>
+        <div class="auth-error" id="reg-error"></div>
+        <div class="auth-success" id="reg-success"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════ APP SHELL ═══════════════════ -->
+<div id="app-shell">
+  <div class="sidebar">
+    <div class="sidebar-head">
+      <div class="sidebar-head-mark" id="doc-initials">··</div>
+      <div>
+        <div class="sidebar-head-name" id="doc-name">—</div>
+        <div class="sidebar-head-role" id="doc-spec">Medico</div>
+      </div>
+    </div>
+    <div class="sidebar-section-label">Pazienti</div>
+    <div class="patient-list" id="patient-list">
+      <div class="sidebar-empty">Caricamento pazienti…</div>
+    </div>
+    <div class="sidebar-foot">
+      <button class="add-patient-btn" onclick="openAddPatientModal()">＋ Aggiungi paziente</button>
+      <button class="logout-link" onclick="doLogout()">Esci</button>
+    </div>
+  </div>
+
+  <div class="main" id="main">
+    <div class="main-empty">
+      <div class="main-empty-mark">👈</div>
+      <div>Seleziona un paziente dalla lista per iniziare</div>
+    </div>
+  </div>
+</div>
+
+<!-- Chatbot di calibrazione AI -->
+<button class="chatbot-fab" id="chatbot-fab" onclick="toggleChatbot()" style="display:none">💬</button>
+<div class="chatbot-panel" id="chatbot-panel">
+  <div class="chatbot-head">
+    <div>
+      <div class="chatbot-head-title">Assistente clinico AI</div>
+      <div class="chatbot-head-sub" id="chatbot-patient-name">—</div>
+    </div>
+    <button class="chatbot-close" onclick="toggleChatbot()">✕</button>
+  </div>
+  <div class="chatbot-msgs" id="chatbot-msgs"></div>
+  <div class="chatbot-input-row">
+    <input type="text" id="chatbot-input" placeholder="Es. abbassa l'ISF a 45..." onkeydown="if(event.key==='Enter') sendChatMessage()"/>
+    <button class="chatbot-send" onclick="sendChatMessage()">➜</button>
+  </div>
+</div>
+
+<script>
+// ── Supabase ──────────────────────────────────────────────────────────────
+const SUPABASE_URL = 'https://zynytvhmlnvlvswuhtse.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_bhmy7olw7-7VxATfSW248g_siFu7lFO';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: {
+    persistSession: true,
+    storageKey: 'dt-medico-auth',
+    storage: window.localStorage,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  }
+});
+
+let currentMedico = null; // { id, user_id, nome, email, specializzazione }
+let currentPatients = [];
+let activePatientId = null;
+
+// ── Tab switching ────────────────────────────────────────────────────────
+function switchAuthTab(tab) {
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+  document.getElementById('form-login').style.display = tab === 'login' ? 'block' : 'none';
+  document.getElementById('form-register').style.display = tab === 'register' ? 'block' : 'none';
+}
+
+// ── Login ────────────────────────────────────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errEl = document.getElementById('login-error');
+  errEl.classList.remove('show');
+
+  if (!email || !password) {
+    errEl.textContent = 'Inserisci email e password.';
+    errEl.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('login-btn');
+  btn.disabled = true; btn.textContent = 'Accesso in corso…';
+
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    errEl.textContent = 'Email o password non corrette.';
+    errEl.classList.add('show');
+    btn.disabled = false; btn.textContent = 'Accedi al portale';
+    return;
+  }
+
+  // Verifica che l'utente sia effettivamente un medico registrato
+  let { data: medico, error: medErr } = await sb
+    .from('medici')
+    .select('*')
+    .eq('user_id', data.user.id)
+    .single();
+
+  // Se il profilo medico non esiste ancora ma ci sono dati di registrazione
+  // in sospeso (caso tipico: primo login dopo la conferma email), lo completiamo ora.
+  if ((medErr || !medico) && data.user.user_metadata?.pending_invito_codice) {
+    btn.textContent = 'Completamento registrazione…';
+    const ok = await completePendingMedicoSetup(data.user);
+    if (ok) {
+      medico = currentMedico;
+      medErr = null;
+    }
+  }
+
+  if (medErr || !medico) {
+    errEl.textContent = 'Questo account non è registrato come medico su questo portale.';
+    errEl.classList.add('show');
+    btn.disabled = false; btn.textContent = 'Accedi al portale';
+    await sb.auth.signOut();
+    return;
+  }
+
+  currentMedico = medico;
+  await enterApp();
+}
+
+// ── Registrazione con codice invito ─────────────────────────────────────
+async function doRegister() {
+  const codice = document.getElementById('reg-code').value.trim().toUpperCase();
+  const nome = document.getElementById('reg-nome').value.trim();
+  const spec = document.getElementById('reg-spec').value.trim();
+  const email = document.getElementById('reg-email').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const errEl = document.getElementById('reg-error');
+  const okEl = document.getElementById('reg-success');
+  errEl.classList.remove('show'); okEl.classList.remove('show');
+
+  if (!codice || !nome || !email || !password) {
+    errEl.textContent = 'Compila tutti i campi obbligatori.';
+    errEl.classList.add('show');
+    return;
+  }
+  if (password.length < 6) {
+    errEl.textContent = 'La password deve avere almeno 6 caratteri.';
+    errEl.classList.add('show');
+    return;
+  }
+
+  const btn = document.getElementById('reg-btn');
+  btn.disabled = true; btn.textContent = 'Verifica codice…';
+
+  // 1. Verifica che il codice invito sia valido
+  const { data: invito, error: invErr } = await sb
+    .from('inviti')
+    .select('*')
+    .eq('codice', codice)
+    .eq('stato', 'pending')
+    .single();
+
+  if (invErr || !invito) {
+    errEl.textContent = 'Codice invito non valido o già utilizzato.';
+    errEl.classList.add('show');
+    btn.disabled = false; btn.textContent = 'Crea account e collegati';
+    return;
+  }
+  if (new Date(invito.scadenza) < new Date()) {
+    errEl.textContent = 'Questo codice invito è scaduto. Chiedi al paziente di generarne uno nuovo.';
+    errEl.classList.add('show');
+    btn.disabled = false; btn.textContent = 'Crea account e collegati';
+    return;
+  }
+
+  // 2. Crea l'account Supabase Auth.
+  // Salviamo nome, specializzazione e codice invito nei metadata dell'utente:
+  // verranno usati per completare la creazione del profilo medico al primo
+  // login riuscito, quando la sessione sarà finalmente attiva dopo la
+  // conferma email (auth.uid() non è valido nell'istante del signUp stesso).
+  btn.textContent = 'Creazione account…';
+  const { data: signUpData, error: signUpErr } = await sb.auth.signUp({
+    email, password,
+    options: {
+      data: {
+        pending_medico_nome: nome,
+        pending_medico_spec: spec || null,
+        pending_invito_codice: codice,
+      }
+    }
+  });
+
+  if (signUpErr) {
+    errEl.textContent = signUpErr.message.includes('already registered')
+      ? 'Esiste già un account con questa email. Prova ad accedere.'
+      : signUpErr.message;
+    errEl.classList.add('show');
+    btn.disabled = false; btn.textContent = 'Crea account e collegati';
+    return;
+  }
+
+  // Se la sessione è già attiva (conferma email disattivata su Supabase),
+  // completiamo subito il setup. Altrimenti chiediamo di controllare l'email.
+  if (signUpData.session) {
+    const ok = await completePendingMedicoSetup(signUpData.user);
+    if (ok) {
+      okEl.textContent = 'Account creato! Accesso in corso…';
+      okEl.classList.add('show');
+      setTimeout(() => enterApp(), 800);
+      return;
+    }
+  }
+
+  okEl.textContent = 'Account creato! Controlla la tua email per confermarlo, poi accedi dalla scheda "Accedi".';
+  okEl.classList.add('show');
+  btn.disabled = false; btn.textContent = 'Crea account e collegati';
+}
+
+// ── Completa la creazione del profilo medico + collegamento paziente.
+// Va eseguita al primo login con sessione attiva, leggendo i dati che
+// erano stati salvati nei metadata utente durante la registrazione.
+async function completePendingMedicoSetup(user) {
+  const pendingNome = user.user_metadata?.pending_medico_nome;
+  const pendingSpec = user.user_metadata?.pending_medico_spec;
+  const pendingCodice = user.user_metadata?.pending_invito_codice;
+
+  if (!pendingNome || !pendingCodice) return false; // niente da completare
+
+  // Il profilo medico potrebbe già esistere se questo setup è già girato in passato
+  const { data: existing } = await sb.from('medici').select('*').eq('user_id', user.id).single();
+  if (existing) {
+    currentMedico = existing;
+    return true;
+  }
+
+  // Crea il profilo medico
+  const { data: medico, error: medErr } = await sb
+    .from('medici')
+    .insert({ user_id: user.id, nome: pendingNome, email: user.email, specializzazione: pendingSpec })
+    .select()
+    .single();
+  if (medErr) return false;
+
+  // Recupera e valida ancora l'invito (potrebbe essere scaduto nel frattempo)
+  const { data: invito } = await sb.from('inviti').select('*').eq('codice', pendingCodice).eq('stato', 'pending').single();
+  if (invito && new Date(invito.scadenza) >= new Date()) {
+    await sb.from('paziente_medico').insert({ paziente_id: invito.paziente_id, medico_id: medico.id, attivo: true });
+    await sb.from('inviti').update({ stato: 'usato', usato_da: user.id, usato_at: new Date().toISOString() }).eq('id', invito.id);
+  }
+
+  // Pulisce i metadata pending per evitare riesecuzioni
+  await sb.auth.updateUser({ data: { pending_medico_nome: null, pending_medico_spec: null, pending_invito_codice: null } });
+
+  currentMedico = medico;
+  return true;
+}
+
+// ── Logout ───────────────────────────────────────────────────────────────
+async function doLogout() {
+  await sb.auth.signOut();
+  currentMedico = null;
+  document.getElementById('app-shell').classList.remove('show');
+  document.getElementById('auth-screen').style.display = 'flex';
+}
+
+// ── Ingresso nell'app ────────────────────────────────────────────────────
+async function enterApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app-shell').classList.add('show');
+
+  document.getElementById('doc-name').textContent = currentMedico.nome;
+  document.getElementById('doc-spec').textContent = currentMedico.specializzazione || 'Medico';
+  document.getElementById('doc-initials').textContent = currentMedico.nome
+    .split(' ').map(p => p[0]).slice(0,2).join('').toUpperCase();
+
+  await loadPatients();
+}
+
+// ── Caricamento pazienti collegati ──────────────────────────────────────
+async function loadPatients() {
+  const listEl = document.getElementById('patient-list');
+
+  const { data: collegamenti, error } = await sb
+    .from('paziente_medico')
+    .select('paziente_id')
+    .eq('medico_id', currentMedico.id)
+    .eq('attivo', true);
+
+  if (error || !collegamenti || collegamenti.length === 0) {
+    listEl.innerHTML = '<div class="sidebar-empty">Nessun paziente collegato ancora. Chiedi al tuo paziente di generarti un codice invito dalla sua app.</div>';
+    return;
+  }
+
+  const patientIds = collegamenti.map(c => c.paziente_id);
+  const { data: profili } = await sb
+    .from('profiles')
+    .select('id, nome, peso')
+    .in('id', patientIds);
+
+  currentPatients = profili || patientIds.map(id => ({ id, nome: 'Paziente' }));
+
+  listEl.innerHTML = '';
+  currentPatients.forEach(p => {
+    const card = document.createElement('button');
+    card.className = 'patient-card';
+    card.id = 'patient-card-' + p.id;
+    card.onclick = () => selectPatient(p.id);
+    const initials = (p.nome || 'P').split(' ').map(x => x[0]).slice(0,2).join('').toUpperCase();
+    card.innerHTML = `
+      <div class="patient-avatar">${initials}</div>
+      <div class="patient-info">
+        <div class="patient-name">${p.nome || 'Paziente'}</div>
+        <div class="patient-meta">Caricamento…</div>
+      </div>
+      <div class="patient-flag ok" id="patient-flag-${p.id}"></div>
+    `;
+    listEl.appendChild(card);
+  });
+}
+
+// ── Selezione paziente ───────────────────────────────────────────────────
+let patientData = { readings: [], insulin: [], meals: [], activities: [], config: null, profile: null };
+let currentRangeDays = 14;
+let glycemiaChart = null;
+
+async function selectPatient(patientId) {
+  activePatientId = patientId;
+  document.querySelectorAll('.patient-card').forEach(c => c.classList.remove('active'));
+  document.getElementById('patient-card-' + patientId).classList.add('active');
+  document.getElementById('chatbot-fab').style.display = 'flex';
+
+  const patient = currentPatients.find(p => p.id === patientId);
+  document.getElementById('chatbot-patient-name').textContent = patient?.nome || 'Paziente';
+  resetChat();
+
+  document.getElementById('main').innerHTML = '<div class="main-empty"><div>Caricamento dati clinici…</div></div>';
+  await loadPatientData(patientId);
+  renderDashboard();
+}
+
+async function loadPatientData(patientId) {
+  const since = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(); // 60gg di storico
+
+  const [readingsRes, insulinRes, mealsRes, activitiesRes, configRes, profileRes] = await Promise.all([
+    sb.from('readings').select('*').eq('user_id', patientId).gte('date', since).order('date', { ascending: true }),
+    sb.from('insulin').select('*').eq('user_id', patientId).gte('date', since).order('date', { ascending: true }),
+    sb.from('meals').select('*').eq('user_id', patientId).gte('date', since).order('date', { ascending: true }),
+    sb.from('activities').select('*').eq('user_id', patientId).gte('date', since).order('date', { ascending: true }),
+    sb.from('insulin_config').select('*').eq('user_id', patientId).single(),
+    sb.from('profiles').select('*').eq('id', patientId).single(),
+  ]);
+
+  patientData = {
+    readings: readingsRes.data || [],
+    insulin: insulinRes.data || [],
+    meals: mealsRes.data || [],
+    activities: activitiesRes.data || [],
+    config: configRes.data || null,
+    profile: profileRes.data || null,
+  };
+}
+
+function filterByRange(arr, days, dateField = 'date') {
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  return arr.filter(x => new Date(x[dateField]).getTime() >= cutoff);
+}
+
+function computeTIR(readings) {
+  if (readings.length === 0) return { inRange: 0, low: 0, high: 0, total: 0 };
+  let inRange = 0, low = 0, high = 0;
+  readings.forEach(r => {
+    if (r.value < 70) low++;
+    else if (r.value > 180) high++;
+    else inRange++;
+  });
+  const total = readings.length;
+  return {
+    inRange: Math.round((inRange/total)*100),
+    low: Math.round((low/total)*100),
+    high: Math.round((high/total)*100),
+    total,
+  };
+}
+
+function estimateHbA1c(readings) {
+  if (readings.length === 0) return null;
+  const avg = readings.reduce((s,r) => s + r.value, 0) / readings.length;
+  // Formula standard: HbA1c (%) = (avg glucose + 46.7) / 28.7
+  return ((avg + 46.7) / 28.7).toFixed(1);
+}
+
+function renderDashboard() {
+  const main = document.getElementById('main');
+  main.innerHTML = `
+    <div class="dash">
+      <div class="dash-header">
+        <div>
+          <h2 id="dash-patient-name">—</h2>
+          <div class="dash-header-sub" id="dash-patient-meta">—</div>
+        </div>
+        <div class="dash-tabs">
+          <button class="dash-tab active" data-range="7" onclick="setRange(7)">7 giorni</button>
+          <button class="dash-tab" data-range="14" onclick="setRange(14)">14 giorni</button>
+          <button class="dash-tab" data-range="30" onclick="setRange(30)">30 giorni</button>
+        </div>
+      </div>
+
+      <div class="kpi-row" id="kpi-row"></div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">Timeline glicemica</div>
+            <div class="panel-title-sub">Andamento continuo nel periodo selezionato</div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="glycemia-chart"></canvas></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="panel">
+          <div class="panel-title" style="margin-bottom:14px">Tempo nel range (TIR)</div>
+          <div id="tir-block"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title" style="margin-bottom:14px">Pattern rilevati dall'AI</div>
+          <div id="pattern-block"></div>
+        </div>
+      </div>
+
+      <div class="grid-3">
+        <div class="panel">
+          <div class="panel-title" style="margin-bottom:14px">Carboidrati</div>
+          <div class="chart-wrap small"><canvas id="carbs-chart"></canvas></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title" style="margin-bottom:14px">Insulina</div>
+          <div class="chart-wrap small"><canvas id="insulin-chart"></canvas></div>
+        </div>
+        <div class="panel">
+          <div class="panel-title" style="margin-bottom:14px">Attività fisica</div>
+          <div id="activity-block"></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="panel-title">Note cliniche</div>
+            <div class="panel-title-sub">Visibili al paziente nell'app</div>
+          </div>
+        </div>
+        <div id="notes-block"></div>
+        <div class="note-compose">
+          <textarea id="note-text" placeholder="Scrivi una nota per il paziente..."></textarea>
+          <button class="note-send-btn" id="note-send-btn" onclick="sendNote()">Invia</button>
+        </div>
+        <label class="push-toggle">
+          <input type="checkbox" id="push-check" checked>
+          🔔 Invia anche notifica push al paziente
+        </label>
+      </div>
+    </div>
+  `;
+
+  const patient = currentPatients.find(p => p.id === activePatientId);
+  document.getElementById('dash-patient-name').textContent = patient?.nome || 'Paziente';
+  document.getElementById('dash-patient-meta').textContent =
+    (patientData.profile?.peso ? patientData.profile.peso + ' kg · ' : '') +
+    (patientData.config?.dose_per_pasto ? `Dosi: ${patientData.config.dose_per_pasto.colazione||0}/${patientData.config.dose_per_pasto.pranzo||0}/${patientData.config.dose_per_pasto.cena||0}U` : 'Nessuna dose configurata');
+
+  setRange(currentRangeDays);
+  loadNotes();
+}
+
+function setRange(days) {
+  currentRangeDays = days;
+  document.querySelectorAll('.dash-tab').forEach(t => t.classList.toggle('active', parseInt(t.dataset.range) === days));
+
+  const readings = filterByRange(patientData.readings, days);
+  const insulin = filterByRange(patientData.insulin, days);
+  const meals = filterByRange(patientData.meals, days);
+  const activities = filterByRange(patientData.activities, days);
+
+  renderKPIs(readings);
+  renderGlycemiaChart(readings);
+  renderTIR(readings);
+  renderPatterns(readings, meals, insulin);
+  renderCarbsChart(meals, days);
+  renderInsulinChart(insulin, days);
+  renderActivityBlock(activities);
+}
+
+function renderKPIs(readings) {
+  const tir = computeTIR(readings);
+  const hba1c = estimateHbA1c(readings);
+  const avg = readings.length ? Math.round(readings.reduce((s,r)=>s+r.value,0)/readings.length) : '—';
+  const lows = readings.filter(r => r.value < 70).length;
+
+  document.getElementById('kpi-row').innerHTML = `
+    <div class="kpi-card">
+      <div class="kpi-label">Tempo nel range</div>
+      <div class="kpi-value ${tir.inRange >= 70 ? 'ok' : tir.inRange >= 50 ? 'warn' : 'critical'}">${tir.inRange}<span class="kpi-unit">%</span></div>
+      <div class="kpi-sub">${tir.total} misurazioni</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">HbA1c stimata</div>
+      <div class="kpi-value ${!hba1c ? '' : hba1c < 7 ? 'ok' : hba1c < 8 ? 'warn' : 'critical'}">${hba1c || '—'}<span class="kpi-unit">%</span></div>
+      <div class="kpi-sub">Stima da glicemia media</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Glicemia media</div>
+      <div class="kpi-value mono">${avg}<span class="kpi-unit">mg/dL</span></div>
+      <div class="kpi-sub">Periodo selezionato</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Episodi ipoglicemia</div>
+      <div class="kpi-value ${lows === 0 ? 'ok' : lows <= 2 ? 'warn' : 'critical'}">${lows}</div>
+      <div class="kpi-sub">&lt; 70 mg/dL</div>
+    </div>
+  `;
+}
+
+function renderGlycemiaChart(readings) {
+  const ctx = document.getElementById('glycemia-chart');
+  if (glycemiaChart) glycemiaChart.destroy();
+  glycemiaChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      datasets: [{
+        data: readings.map(r => ({ x: new Date(r.date), y: r.value })),
+        borderColor: '#2563A8',
+        backgroundColor: 'rgba(37,99,168,0.06)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2,
+        pointBackgroundColor: readings.map(r => r.value < 70 || r.value > 180 ? '#C84B31' : '#2563A8'),
+        borderWidth: 1.5,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { type: 'time', time: { unit: currentRangeDays > 14 ? 'week' : 'day' }, grid: { display: false } },
+        y: { min: 40, max: 300, grid: { color: '#F0F2F5' },
+          afterDataLimits: (axis) => {} },
+      },
+      plugins: { legend: { display: false } },
+    },
+    plugins: [{
+      id: 'rangeBands',
+      beforeDraw: (chart) => {
+        const { ctx, chartArea, scales } = chart;
+        if (!chartArea) return;
+        const yTop = scales.y.getPixelForValue(180);
+        const yBottom = scales.y.getPixelForValue(70);
+        ctx.save();
+        ctx.fillStyle = 'rgba(61,139,95,0.06)';
+        ctx.fillRect(chartArea.left, yTop, chartArea.right - chartArea.left, yBottom - yTop);
+        ctx.restore();
+      }
+    }]
+  });
+}
+
+function renderTIR(readings) {
+  const tir = computeTIR(readings);
+  document.getElementById('tir-block').innerHTML = `
+    <div class="tir-bar">
+      <div class="tir-seg" style="width:${tir.high}%;background:#C8932F"></div>
+      <div class="tir-seg" style="width:${tir.inRange}%;background:#3D8B5F"></div>
+      <div class="tir-seg" style="width:${tir.low}%;background:#C84B31"></div>
+    </div>
+    <div class="tir-legend">
+      <div class="tir-legend-item"><span class="tir-dot" style="background:#C8932F"></span>Sopra range (${tir.high}%)</div>
+      <div class="tir-legend-item"><span class="tir-dot" style="background:#3D8B5F"></span>In range 70-180 (${tir.inRange}%)</div>
+      <div class="tir-legend-item"><span class="tir-dot" style="background:#C84B31"></span>Sotto range (${tir.low}%)</div>
+    </div>
+  `;
+}
+
+function renderPatterns(readings, meals, insulin) {
+  const block = document.getElementById('pattern-block');
+  if (readings.length < 5) {
+    block.innerHTML = '<div class="empty-state">Dati insufficienti per rilevare pattern in questo periodo.</div>';
+    return;
+  }
+
+  // Pattern semplici lato client (euristiche locali, non sostituiscono l'analisi AI completa)
+  const patterns = [];
+  const lows = readings.filter(r => r.value < 70);
+  if (lows.length >= 3) {
+    patterns.push({ sev: 'critico', meal: 'Ipoglicemie', text: `${lows.length} episodi sotto 70 mg/dL nel periodo. Valutare riduzione dosi.` });
+  }
+  const highs = readings.filter(r => r.value > 250);
+  if (highs.length >= 3) {
+    patterns.push({ sev: 'attenzione', meal: 'Iperglicemie marcate', text: `${highs.length} letture sopra 250 mg/dL. Possibile sottocopertura.` });
+  }
+  const tir = computeTIR(readings);
+  if (tir.inRange >= 70) {
+    patterns.push({ sev: 'positivo', meal: 'Controllo glicemico', text: `TIR al ${tir.inRange}%, in linea con gli obiettivi standard (>70%).` });
+  }
+  if (patterns.length === 0) {
+    patterns.push({ sev: 'attenzione', meal: 'Andamento', text: 'Nessun pattern critico rilevato automaticamente. Usa la chat AI per un\'analisi più approfondita.' });
+  }
+
+  block.innerHTML = patterns.map(p => `
+    <div class="pattern-item ${p.sev}">
+      <div class="pattern-meal">${p.meal}</div>
+      <div class="pattern-text">${p.text}</div>
+    </div>
+  `).join('');
+}
+
+function renderCarbsChart(meals, days) {
+  const ctx = document.getElementById('carbs-chart');
+  const byDay = {};
+  meals.forEach(m => {
+    const day = m.date.slice(0,10);
+    byDay[day] = (byDay[day] || 0) + (m.carbs || 0);
+  });
+  const labels = Object.keys(byDay).sort();
+  if (window._carbsChart) window._carbsChart.destroy();
+  window._carbsChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: labels.map(d => d.slice(5)), datasets: [{ data: labels.map(d => byDay[d]), backgroundColor: '#C8932F', borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#F0F2F5' } }, x: { grid: { display: false } } } }
+  });
+}
+
+function renderInsulinChart(insulin, days) {
+  const ctx = document.getElementById('insulin-chart');
+  const byDay = {};
+  insulin.forEach(i => {
+    const day = i.date.slice(0,10);
+    byDay[day] = (byDay[day] || 0) + (i.units || 0);
+  });
+  const labels = Object.keys(byDay).sort();
+  if (window._insulinChart) window._insulinChart.destroy();
+  window._insulinChart = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: labels.map(d => d.slice(5)), datasets: [{ data: labels.map(d => byDay[d]), backgroundColor: '#2563A8', borderRadius: 4 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#F0F2F5' } }, x: { grid: { display: false } } } }
+  });
+}
+
+function renderActivityBlock(activities) {
+  const block = document.getElementById('activity-block');
+  if (activities.length === 0) {
+    block.innerHTML = '<div class="empty-state">Nessuna attività registrata nel periodo.</div>';
+    return;
+  }
+  const totalMin = activities.reduce((s,a) => s + (a.durata_minuti || 0), 0);
+  const tipi = {};
+  activities.forEach(a => { tipi[a.tipo || 'Altro'] = (tipi[a.tipo || 'Altro'] || 0) + 1; });
+  const tipoTop = Object.entries(tipi).sort((a,b) => b[1]-a[1])[0];
+
+  block.innerHTML = `
+    <div class="stat-mini"><span class="stat-mini-value">${activities.length}</span><span class="stat-mini-label">sessioni registrate</span></div>
+    <div class="stat-mini"><span class="stat-mini-value">${totalMin}</span><span class="stat-mini-label">minuti totali</span></div>
+    <div class="stat-mini"><span class="stat-mini-value">${tipoTop ? tipoTop[0] : '—'}</span><span class="stat-mini-label">attività più frequente</span></div>
+  `;
+}
+
+// ── Note cliniche ────────────────────────────────────────────────────────
+async function loadNotes() {
+  const { data: notes } = await sb
+    .from('note_mediche')
+    .select('*')
+    .eq('paziente_id', activePatientId)
+    .eq('medico_id', currentMedico.id)
+    .order('created_at', { ascending: false })
+    .limit(20);
+
+  const block = document.getElementById('notes-block');
+  if (!notes || notes.length === 0) {
+    block.innerHTML = '<div class="empty-state">Nessuna nota ancora per questo paziente.</div>';
+    return;
+  }
+
+  block.innerHTML = notes.map(n => `
+    <div class="note-item">
+      <div class="note-meta">${new Date(n.created_at).toLocaleString('it-IT', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' })}</div>
+      <div class="note-text">${n.testo}</div>
+      ${n.parametri_modificati ? `<div class="note-params">${Object.entries(n.parametri_modificati).map(([k,v]) => `<span class="note-param-pill">${k}: ${v}</span>`).join('')}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+async function sendNote() {
+  const textEl = document.getElementById('note-text');
+  const testo = textEl.value.trim();
+  if (!testo) return;
+
+  const btn = document.getElementById('note-send-btn');
+  btn.disabled = true;
+
+  await sb.from('note_mediche').insert({
+    medico_id: currentMedico.id,
+    paziente_id: activePatientId,
+    testo,
+  });
+
+  // Invia push notification se checkbox attivo
+  const pushCheck = document.getElementById('push-check');
+  if (pushCheck && pushCheck.checked) {
+    try {
+      await fetch('/.netlify/functions/send-push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paziente_id: activePatientId,
+          titolo: '🩺 Messaggio dal tuo medico',
+          messaggio: testo.length > 80 ? testo.slice(0, 80) + '…' : testo
+        })
+      });
+    } catch(e) { console.warn('Push non inviata:', e.message); }
+  }
+
+  textEl.value = '';
+  btn.disabled = false;
+  loadNotes();
+}
+
+// ── Chatbot di calibrazione AI ──────────────────────────────────────────
+let chatHistory = [];
+
+function resetChat() {
+  chatHistory = [];
+  document.getElementById('chatbot-msgs').innerHTML = `
+    <div class="chat-msg assistant">Ciao! Sono qui per aiutarti ad analizzare i dati di questo paziente. Puoi chiedermi di valutare il rapporto insulina/carboidrati, individuare pattern, o dirmi direttamente di aggiornare un parametro (es. "abbassa l'ISF a 45" oppure "porta la dose di pranzo a 8 unità").</div>
+  `;
+  document.getElementById('chatbot-panel').classList.remove('show');
+}
+
+function toggleChatbot() {
+  document.getElementById('chatbot-panel').classList.toggle('show');
+}
+
+function appendChatMsg(role, text) {
+  const msgs = document.getElementById('chatbot-msgs');
+  const div = document.createElement('div');
+  div.className = 'chat-msg ' + role;
+  div.textContent = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+async function sendChatMessage() {
+  const input = document.getElementById('chatbot-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+
+  appendChatMsg('user', text);
+  chatHistory.push({ role: 'user', content: text });
+  const thinkingMsg = appendChatMsg('assistant', '…');
+
+  try {
+    const response = await fetch('/.netlify/functions/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        analysisType: 'medico-chat',
+        data: {
+          messaggio: text,
+          storia: chatHistory.slice(0, -1),
+          paziente: {
+            nome: currentPatients.find(p => p.id === activePatientId)?.nome,
+            peso: patientData.profile?.peso,
+            isf: patientData.profile?.isf,
+            config: patientData.config?.dose_per_pasto,
+            readings_recenti: filterByRange(patientData.readings, 14).slice(-40),
+            insulin_recenti: filterByRange(patientData.insulin, 14).slice(-40),
+            meals_recenti: filterByRange(patientData.meals, 14).slice(-40),
+          }
+        }
+      })
+    });
+    const result = await response.json();
+    thinkingMsg.remove();
+
+    if (result.error) {
+      appendChatMsg('assistant', 'Errore: ' + result.error);
+      return;
+    }
+
+    appendChatMsg('assistant', result.risposta || 'Ricevuto.');
+    chatHistory.push({ role: 'assistant', content: result.risposta || '' });
+
+    // Se l'AI ha proposto modifiche ai parametri, le applichiamo e salviamo una nota
+    if (result.parametri_da_aggiornare && Object.keys(result.parametri_da_aggiornare).length > 0) {
+      await applyParameterChanges(result.parametri_da_aggiornare, result.risposta);
+    }
+  } catch (e) {
+    thinkingMsg.remove();
+    appendChatMsg('assistant', 'Errore di connessione: ' + e.message);
+  }
+}
+
+async function applyParameterChanges(params, contestoRisposta) {
+  appendChatMsg('applying', '⚙️ Applico le modifiche: ' + Object.entries(params).map(([k,v]) => `${k} → ${v}`).join(', '));
+
+  // Aggiorna ISF nel profilo se presente
+  if (params.isf !== undefined) {
+    await sb.from('profiles').update({ isf: params.isf }).eq('id', activePatientId);
+  }
+
+  // Aggiorna dosi prescritte se presenti
+  // Gestisce sia il formato con prefisso (dose_pranzo) che senza (pranzo)
+  const doseFields = ['dose_colazione', 'dose_pranzo', 'dose_cena', 'dose_notte'];
+  const doseFieldsShort = ['colazione', 'pranzo', 'cena', 'notte'];
+  const hasDoseChanges = doseFields.some(f => params[f] !== undefined)
+                      || doseFieldsShort.some(f => params[f] !== undefined);
+  if (hasDoseChanges) {
+    const currentDose = patientData.config?.dose_per_pasto || {};
+    const newDose = {
+      colazione: params.dose_colazione ?? params.colazione ?? currentDose.colazione,
+      pranzo:    params.dose_pranzo    ?? params.pranzo    ?? currentDose.pranzo,
+      cena:      params.dose_cena      ?? params.cena      ?? currentDose.cena,
+      notte:     params.dose_notte     ?? params.notte      ?? currentDose.notte,
+    };
+    await sb.from('insulin_config').upsert({ user_id: activePatientId, dose_per_pasto: newDose }, { onConflict: 'user_id' });
+    // Aggiorna anche patientData locale per coerenza
+    if (patientData.config) patientData.config.dose_per_pasto = newDose;
+  }
+
+  // Salva la nota clinica con i parametri modificati, tracciabile dal paziente
+  await sb.from('note_mediche').insert({
+    medico_id: currentMedico.id,
+    paziente_id: activePatientId,
+    testo: contestoRisposta || 'Parametri aggiornati dal medico tramite assistente AI.',
+    parametri_modificati: params,
+  });
+
+  // Invia push notification automatica al paziente
+  try {
+    const riepilogo = Object.entries(params).map(([k,v]) => `${k.replace('dose_','')} → ${v}`).join(', ');
+    await fetch('/.netlify/functions/send-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        paziente_id: activePatientId,
+        titolo: '🩺 Il tuo medico ha aggiornato i parametri',
+        messaggio: riepilogo
+      })
+    });
+  } catch(e) { console.warn('Push parametri non inviata:', e.message); }
+
+  // Ricarica i dati per riflettere subito le modifiche
+  await loadPatientData(activePatientId);
+  loadNotes();
+}
+
+// ── Sessione esistente al caricamento ───────────────────────────────────
+(async function checkSession() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) {
+    let { data: medico } = await sb.from('medici').select('*').eq('user_id', session.user.id).single();
+
+    // Se l'utente è atterrato qui con una sessione attiva (es. dal link di
+    // conferma email) ma il profilo medico non è ancora stato creato,
+    // completiamo il setup usando i dati salvati durante la registrazione.
+    if (!medico && session.user.user_metadata?.pending_invito_codice) {
+      const ok = await completePendingMedicoSetup(session.user);
+      if (ok) medico = currentMedico;
+    }
+
+    if (medico) {
+      currentMedico = medico;
+      await enterApp();
+    }
+  }
+})();
+</script>
+<!-- ═══════════════════ MODAL AGGIUNGI PAZIENTE ═══════════════════ -->
+<div id="add-patient-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:900; align-items:center; justify-content:center;">
+  <div style="background:#fff; border-radius:16px; padding:32px; width:360px; max-width:90vw; box-shadow:0 20px 60px rgba(0,0,0,0.2);">
+    <h3 style="margin:0 0 6px; font-size:17px; color:var(--ink);">➕ Aggiungi paziente</h3>
+    <p style="margin:0 0 20px; font-size:13px; color:var(--ink-soft); line-height:1.5;">Inserisci il codice che il paziente ha generato dalla sezione <strong>Profilo</strong> della sua app.</p>
+    <label style="display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:6px; letter-spacing:.05em;">CODICE INVITO</label>
+    <input id="add-patient-code" type="text" placeholder="es. A1B2C3D4"
+      style="width:100%; box-sizing:border-box; padding:12px 14px; border:1.5px solid var(--line); border-radius:10px; font-size:18px; font-family:'IBM Plex Mono',monospace; letter-spacing:.15em; text-transform:uppercase; outline:none; color:var(--ink);"
+      oninput="this.value=this.value.toUpperCase()"
+      onkeydown="if(event.key==='Enter') doAddPatient()">
+    <div id="add-patient-err" style="display:none; margin-top:10px; padding:10px 12px; background:#fff0f0; border-radius:8px; font-size:13px; color:#c84b31;"></div>
+    <div id="add-patient-ok" style="display:none; margin-top:10px; padding:10px 12px; background:#f0faf4; border-radius:8px; font-size:13px; color:#2a7a4f;"></div>
+    <div style="display:flex; gap:10px; margin-top:20px;">
+      <button onclick="closeAddPatientModal()" style="flex:1; padding:11px; border:1.5px solid var(--line); border-radius:10px; background:#fff; color:var(--ink-soft); font-size:14px; cursor:pointer;">Annulla</button>
+      <button onclick="doAddPatient()" id="add-patient-btn" style="flex:2; padding:11px; border:none; border-radius:10px; background:var(--accent); color:#fff; font-size:14px; font-weight:600; cursor:pointer;">Collega paziente</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Aggiungi paziente via codice invito ──────────────────────────────────
+function openAddPatientModal() {
+  document.getElementById('add-patient-code').value = '';
+  document.getElementById('add-patient-err').style.display = 'none';
+  document.getElementById('add-patient-ok').style.display = 'none';
+  const btn = document.getElementById('add-patient-btn');
+  btn.disabled = false;
+  btn.textContent = 'Collega paziente';
+  const overlay = document.getElementById('add-patient-overlay');
+  overlay.style.display = 'flex';
+  setTimeout(() => document.getElementById('add-patient-code').focus(), 100);
+}
+
+function closeAddPatientModal() {
+  document.getElementById('add-patient-overlay').style.display = 'none';
+}
+
+async function doAddPatient() {
+  const codice = document.getElementById('add-patient-code').value.trim().toUpperCase();
+  const errEl = document.getElementById('add-patient-err');
+  const okEl  = document.getElementById('add-patient-ok');
+  const btn   = document.getElementById('add-patient-btn');
+
+  errEl.style.display = 'none';
+  okEl.style.display  = 'none';
+
+  if (!codice || codice.length < 6) {
+    errEl.textContent = 'Inserisci un codice valido.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Verifica…';
+
+  try {
+    // 1. Cerca il codice invito
+    const { data: inviti, error: invErr } = await sb
+      .from('inviti')
+      .select('id, paziente_id, stato, scadenza')
+      .eq('codice', codice)
+      .limit(1);
+
+    if (invErr || !inviti || inviti.length === 0) {
+      throw new Error('Codice non trovato. Verifica che sia corretto.');
+    }
+
+    const invito = inviti[0];
+
+    if (invito.stato === 'usato') {
+      throw new Error('Questo codice è già stato utilizzato. Chiedi al paziente di generarne uno nuovo.');
+    }
+    if (new Date(invito.scadenza) < new Date()) {
+      throw new Error('Questo codice è scaduto. Chiedi al paziente di generarne uno nuovo dall\'app.');
+    }
+
+    // 2. Controlla se il paziente è già collegato
+    const { data: esistente } = await sb
+      .from('paziente_medico')
+      .select('id')
+      .eq('medico_id', currentMedico.id)
+      .eq('paziente_id', invito.paziente_id)
+      .eq('attivo', true)
+      .limit(1);
+
+    if (esistente && esistente.length > 0) {
+      throw new Error('Questo paziente è già collegato al tuo account.');
+    }
+
+    // 3. Crea il collegamento
+    const { error: linkErr } = await sb
+      .from('paziente_medico')
+      .insert({ medico_id: currentMedico.id, paziente_id: invito.paziente_id, attivo: true });
+
+    if (linkErr) throw new Error('Errore durante il collegamento: ' + linkErr.message);
+
+    // 4. Marca l'invito come usato
+    await sb.from('inviti').update({
+      stato: 'usato',
+      usato_da: currentMedico.user_id,
+      usato_at: new Date().toISOString()
+    }).eq('id', invito.id);
+
+    // 5. Successo — ricarica lista
+    okEl.textContent = '✅ Paziente collegato con successo!';
+    okEl.style.display = 'block';
+    btn.textContent = 'Collegato!';
+    await loadPatients();
+    setTimeout(() => closeAddPatientModal(), 1800);
+
+  } catch (e) {
+    errEl.textContent = e.message;
+    errEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Collega paziente';
+  }
+}
+
+// Chiudi modal cliccando fuori
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('add-patient-overlay').addEventListener('click', function(e) {
+    if (e.target === this) closeAddPatientModal();
+  });
+});
+</script>
+
+</body>
+</html>
