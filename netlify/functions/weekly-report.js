@@ -42,7 +42,7 @@ Genera SOLO il contenuto HTML (senza <html>, <head>, <body>, <DOCTYPE>) con ques
 Usa il "voi" formale. Sii specifico e cita i dati. Rispondi SOLO con HTML, niente markdown, niente backtick.`;
 
   const body = JSON.stringify({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 2500,
     messages: [{ role: 'user', content: prompt }]
   });
