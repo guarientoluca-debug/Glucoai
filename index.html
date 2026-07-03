@@ -156,6 +156,7 @@ h2 { font-family: 'Syne', sans-serif; font-size: clamp(28px, 4vw, 42px); font-we
 .sec-sub { font-size: 16px; color: var(--soft); line-height: 1.7; max-width: 500px; }
 
 .feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.feat-icon-wrap.a { background: #FFF8E7; }
 .feat-card {
   background: white; border: 1.5px solid var(--border); border-radius: 20px;
   padding: 28px; transition: transform .2s, box-shadow .2s;
@@ -296,7 +297,7 @@ footer { background: var(--ink); padding: 56px 40px 32px; }
 <!-- NAV -->
 <nav>
   <a href="/" class="nav-logo">
-    <div class="nav-mark">🩸</div>
+    <div class="nav-mark" style="background:linear-gradient(135deg,#E84545,#c0392b);font-size:20px;font-weight:800;color:#FFD700">G</div>
     <span class="nav-name">GlucoAI</span>
   </a>
   <div class="nav-links">
@@ -320,7 +321,7 @@ footer { background: var(--ink); padding: 56px 40px 32px; }
       Powered by Claude AI
     </div>
     <h1>Gestisci il diabete<br>con <span class="accent">intelligenza</span></h1>
-    <p class="hero-sub">GlucoAI analizza i tuoi dati, riconosce i pasti dalla foto e suggerisce la dose di insulina. Il tuo diabetologo è sempre in loop.</p>
+    <p class="hero-sub">GlucoAI analizza i tuoi dati con AI, riconosce i pasti dalla foto, classifica l'indice glicemico e suggerisce la dose di insulina personalizzata. Feedback post-prandiale automatico e portale medico integrato.</p>
     <div class="hero-actions">
       <a href="#" class="btn-big primary">📱 Scarica gratis <span style="font-size:12px;opacity:.75">· presto disponibile</span></a>
       <a href="#features" class="btn-big outline">Scopri come funziona</a>
@@ -378,6 +379,7 @@ footer { background: var(--ink); padding: 56px 40px 32px; }
     <!-- Floating pills -->
     <div class="pill pill-1">📸 Pasta 68g carbo</div>
     <div class="pill pill-2">💉 Dose suggerita: 9U</div>
+    <div class="pill pill-1" style="top:auto;bottom:-10px;left:40px;animation-delay:1.5s">🌙 Dark mode nativo</div>
   </div>
 </div>
 </div>
@@ -395,7 +397,7 @@ footer { background: var(--ink); padding: 56px 40px 32px; }
     </div>
     <div class="strip-stat">
       <div class="strip-val"><em>AI</em> · 24/7</div>
-      <div class="strip-label">analisi continua</div>
+      <div class="strip-label">feedback post-prandiale</div>
     </div>
     <div class="strip-stat">
       <div class="strip-val"><em>IT</em> · EN</div>
@@ -415,44 +417,65 @@ footer { background: var(--ink); padding: 56px 40px 32px; }
   <div class="feat-grid">
     <div class="feat-card">
       <div class="feat-icon-wrap r">📸</div>
-      <div class="feat-title">Analisi foto pasto</div>
-      <p class="feat-desc">Scatta una foto e l'AI riconosce ogni alimento, stima i carboidrati e mostra calorie, proteine, grassi e fibre per 100g. Puoi aggiungere più foto per lo stesso pasto.</p>
-      <span class="feat-chip chip-red">Claude Sonnet AI</span>
+      <div class="feat-title">Analisi foto + Indice Glicemico</div>
+      <p class="feat-desc">Scatta una foto e l'AI riconosce ogni alimento con carbo, proteine, grassi e fibre. Classifica automaticamente l'indice glicemico (🟢 lento, 🟡 medio, 🔴 veloce) e adatta la dose.</p>
+      <span class="feat-chip chip-red">Claude AI + IG</span>
     </div>
 
     <div class="feat-card">
       <div class="feat-icon-wrap t">💉</div>
-      <div class="feat-title">Dose insulina intelligente</div>
-      <p class="feat-desc">Suggerisce la dose basandosi su glicemia attuale, carboidrati del pasto, attività fisica e ISF personalizzato. Impara dai tuoi ultimi 14 giorni di dati.</p>
-      <span class="feat-chip chip-teal">Adattivo</span>
+      <div class="feat-title">Dose insulina personalizzata</div>
+      <p class="feat-desc">Calcola la dose con formula: base + carbo + correzione glicemica progressiva, tenendo conto dell'attività fisica. Supporta NovoRapid, Humalog, FIASP e Apidra con IOB personalizzato.</p>
+      <span class="feat-chip chip-teal">Marche insulina</span>
     </div>
 
     <div class="feat-card">
       <div class="feat-icon-wrap b">📡</div>
       <div class="feat-title">Sensore Libre integrato</div>
-      <p class="feat-desc">Sincronizzazione automatica con LibreLink Up ogni 2 ore. Leggi la glicemia in tempo reale e vedi trend e statistiche direttamente nell'app.</p>
+      <p class="feat-desc">Sincronizzazione automatica con LibreLink Up. Letture ogni 15 minuti, trend in tempo reale, TIR, HbA1c stimata e storico completo.</p>
       <span class="feat-chip chip-blue">Freestyle Libre</span>
     </div>
 
     <div class="feat-card">
-      <div class="feat-icon-wrap a">🔗</div>
-      <div class="feat-title">Correlazione pasto-glicemia</div>
-      <p class="feat-desc">Vedi come ogni pasto ha influenzato la glicemia 3 ore dopo. Pattern chiari, decisioni migliori. L'AI analizza i trend e ti mostra cosa funziona.</p>
-      <span class="feat-chip chip-blue">Analytics</span>
+      <div class="feat-icon-wrap a">🔔</div>
+      <div class="feat-title">Feedback post-prandiale</div>
+      <p class="feat-desc">3 ore dopo ogni pasto ricevi una notifica push con il risultato: l'AI distingue tra problemi di dose e problemi di timing (carbo veloci vs lenti) e ti dice cosa fare la prossima volta.</p>
+      <span class="feat-chip chip-red">Nuovo</span>
     </div>
 
     <div class="feat-card">
       <div class="feat-icon-wrap r">🏃</div>
-      <div class="feat-title">Attività fisica</div>
-      <p class="feat-desc">Carica lo screenshot da Strava, Apple Watch o Garmin. L'AI riconosce il tipo di attività e riduce automaticamente la dose suggerita di insulina.</p>
-      <span class="feat-chip chip-red">Integrazione app</span>
+      <div class="feat-title">IOB e Attività fisica</div>
+      <p class="feat-desc">Bottone IOB sulla home: mostra l'insulina ancora attiva e i grammi di carbo da assumere prima dell'esercizio. Integra screenshot da Strava, Apple Watch e Garmin.</p>
+      <span class="feat-chip chip-red">Insulin On Board</span>
+    </div>
+
+    <div class="feat-card">
+      <div class="feat-icon-wrap b">🔗</div>
+      <div class="feat-title">Correlazione e analisi pattern</div>
+      <p class="feat-desc">Media post-prandiale per ogni pasto, TIR per fascia oraria, suggerimento dose settimanale automatico con accettazione in-app. Il medico vede tutto nel portale.</p>
+      <span class="feat-chip chip-blue">Analytics AI</span>
     </div>
 
     <div class="feat-card">
       <div class="feat-icon-wrap t">🩺</div>
-      <div class="feat-title">Collegamento al medico</div>
-      <p class="feat-desc">Il tuo diabetologo accede ai tuoi dati in tempo reale e può aggiornare la terapia direttamente. Ricevi le note del medico come notifica nell'app.</p>
+      <div class="feat-title">Portale medico + Push</div>
+      <p class="feat-desc">Il diabetologo accede ai dati in tempo reale, modifica la terapia via chatbot AI e invia notifiche push al paziente. Report settimanale con analisi clinica AI.</p>
       <span class="feat-chip chip-teal">Portale Medico</span>
+    </div>
+
+    <div class="feat-card">
+      <div class="feat-icon-wrap a">🌙</div>
+      <div class="feat-title">Dark mode nativo</div>
+      <p class="feat-desc">Interfaccia dark mode su tutte le schermate, che segue automaticamente il tema del telefono. Pensato per i controlli notturni senza affaticare gli occhi.</p>
+      <span class="feat-chip chip-blue">Design</span>
+    </div>
+
+    <div class="feat-card">
+      <div class="feat-icon-wrap r">📧</div>
+      <div class="feat-title">Report settimanale AI</div>
+      <p class="feat-desc">Ogni domenica ricevi un'email con analisi clinica generata da AI: cosa sta funzionando, aree di miglioramento, valutazione rapporto I:C e messaggio motivazionale.</p>
+      <span class="feat-chip chip-red">Claude Haiku</span>
     </div>
   </div>
 </div>
