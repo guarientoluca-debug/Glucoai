@@ -106,7 +106,7 @@ exports.handler = async (event) => {
       if (gi === 'lento') hasLento = true;
     }
     // Se non abbiamo info GI, cerchiamo nel nome
-    const mealNote = (meal.nota || '').toLowerCase();
+    const mealNote = (meal.note || '').toLowerCase();
     const fastFoods = ['pizza', 'focaccia', 'pane bianco', 'dolce', 'brioche', 'cornetto', 'succo'];
     if (!hasVeloce && fastFoods.some(f => mealNote.includes(f))) hasVeloce = true;
 
