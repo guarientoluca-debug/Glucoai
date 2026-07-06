@@ -128,7 +128,7 @@ async function syncUser(supabase, user_id, email, password) {
       if (t - lastKept < MIN_SPACING_MS) continue; // troppo vicina a una appena tenuta
       if (seenIds.has(t)) continue;              // duplicato esatto
       seenIds.add(t);
-      toInsert.push({ id: t, user_id, value: v, date: new Date(t).toISOString() });
+      toInsert.push({ id: t, user_id, value: v, date: toUTC(new Date(t)).toISOString() });
       lastKept = t;
     }
 
