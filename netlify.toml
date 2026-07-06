@@ -9,3 +9,6 @@ schedule = "0 */2 * * *"
 
 [functions."meal-feedback"]
   schedule = "*/30 * * * *"
+
+[functions."hypo-predict"]
+  schedule = "*/15 * * * *"
