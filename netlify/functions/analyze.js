@@ -21,9 +21,27 @@ exports.handler = async function(event, context) {
 
     let messages;
 
+    // ── Modalità 7: lettura etichetta nutrizionale (DEVE stare PRIMA del check imageBase64) ──
+    if (body.analysisType === 'read-label' && body.imageBase64) {
+      const { imageBase64, mediaType } = body;
+      messages = [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
+          { type: 'text', text: `Leggi la tabella nutrizionale in questa foto di un prodotto alimentare confezionato.
+
+Estrai i valori PER 100g dalla tabella. Se ci sono solo valori "per porzione", converti a per 100g usando il peso della porzione indicato.
+
+Rispondi SOLO con JSON valido senza markdown:
+{"nome_prodotto":"nome del prodotto se visibile","carbo_per_100g":15.7,"di_cui_zuccheri_per_100g":1.8,"proteine_per_100g":10,"grassi_per_100g":12.9,"fibre_per_100g":0.89,"kcal_per_100g":303,"sale_per_100g":0.89,"porzione_g":125,"note":"eventuali note"}
+
+Se non riesci a leggere chiaramente un valore, metti null. Il campo più importante è carbo_per_100g — assicurati che sia corretto.` }
+        ]
+      }];
+
     // ── Modalità 1a: analisi foto pasto ──────────────────────────────────────
     // ── Modalità 1b: descrizione testuale pasto (senza foto) ─────────────────
-    if (body.imageBase64 || body.textDescription) {
+    } else if (body.imageBase64 || body.textDescription) {
 
       const FOOD_ANALYSIS_PROMPT = `Sei un nutrizionista clinico esperto, specializzato in conteggio carboidrati per pazienti diabetici di tipo 1.
 
@@ -290,31 +308,12 @@ Rispondi SOLO con JSON valido senza markdown, formato:
 {"risposta": "testo della risposta per il medico", "parametri_da_aggiornare": {}}`
       }];
 
-    // ── Modalità 7: lettura etichetta nutrizionale ─────────────────────────
-    } else if (body.analysisType === 'read-label') {
-      const { imageBase64, mediaType } = body;
-      if (!imageBase64) return { statusCode: 400, headers, body: JSON.stringify({ error: 'Immagine etichetta mancante' }) };
-      messages = [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
-          { type: 'text', text: `Leggi la tabella nutrizionale in questa foto di un prodotto alimentare confezionato.
-
-Estrai i valori PER 100g dalla tabella. Se ci sono solo valori "per porzione", converti a per 100g usando il peso della porzione indicato.
-
-Rispondi SOLO con JSON valido senza markdown:
-{"nome_prodotto":"nome del prodotto se visibile","carbo_per_100g":15.7,"di_cui_zuccheri_per_100g":1.8,"proteine_per_100g":10,"grassi_per_100g":12.9,"fibre_per_100g":0.89,"kcal_per_100g":303,"sale_per_100g":0.89,"porzione_g":125,"note":"eventuali note"}
-
-Se non riesci a leggere chiaramente un valore, metti null. Il campo più importante è carbo_per_100g — assicurati che sia corretto.` }
-        ]
-      }];
-
     } else {
       return { statusCode: 400, headers, body: JSON.stringify({ error: 'Parametri mancanti: imageBase64 o analysisType richiesto' }) };
     }
 
     // ── Chiamata API Anthropic ───────────────────────────────────────────────
-    const isFoodAnalysis = !!body.imageBase64 || !!body.textDescription;
+    const isFoodAnalysis = (!!body.imageBase64 || !!body.textDescription) && body.analysisType !== 'read-label';
     const isLabelReading = body.analysisType === 'read-label';
     const isPhotoAnalysis = !!body.imageBase64;
     const isTextOnly = !!body.textDescription && !body.imageBase64;
