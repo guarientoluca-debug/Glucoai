@@ -371,12 +371,30 @@ Se non riesci a leggere chiaramente un valore, metti null. Il campo più importa
     const text = textBlocks.join('\n');
     if (!text) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Risposta vuota da Claude' }) };
 
-    const clean = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+    // Estrai JSON dalla risposta — potrebbe essere avvolto in testo o markdown
+    let clean = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+    
+    // Se il testo contiene JSON mescolato a testo, prova ad estrarlo
+    let jsonResult;
+    try {
+      jsonResult = JSON.parse(clean);
+    } catch(e) {
+      // Cerca il primo { e l'ultimo } per estrarre il JSON
+      const firstBrace = clean.indexOf('{');
+      const lastBrace = clean.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        const jsonCandidate = clean.substring(firstBrace, lastBrace + 1);
+        try {
+          jsonResult = JSON.parse(jsonCandidate);
+        } catch(e2) {
+          return { statusCode: 500, headers, body: JSON.stringify({ error: 'Claude non ha restituito JSON valido', raw: clean.slice(0, 300) }) };
+        }
+      } else {
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Claude non ha restituito JSON valido', raw: clean.slice(0, 300) }) };
+      }
+    }
 
-    try { JSON.parse(clean); }
-    catch(e) { return { statusCode: 500, headers, body: JSON.stringify({ error: 'Claude non ha restituito JSON valido', raw: clean.slice(0, 200) }) }; }
-
-    return { statusCode: 200, headers, body: clean };
+    return { statusCode: 200, headers, body: JSON.stringify(jsonResult) };
 
   } catch (err) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };
