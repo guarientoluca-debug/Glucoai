@@ -192,6 +192,11 @@ exports.handler = async (event) => {
       letta: false,
     });
 
+    // Aggiorna il pasto con il valore post-prandiale
+    await supabase.from('meals').update({
+      post_meal_glucose: postValue,
+    }).eq('id', meal.id);
+
     // Push notification
     const { data: profileData } = await supabase
       .from('profiles')
