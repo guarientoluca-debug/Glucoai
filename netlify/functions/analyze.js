@@ -31,7 +31,7 @@ OBIETTIVO PRINCIPALE:
 Il dato PIÙ IMPORTANTE è "carbo_per_100g": DEVE essere il valore nutrizionale REALE dell'alimento, preso dalle tabelle nutrizionali ufficiali (CREA/INRAN, etichette, banche dati). NON stimare: usa valori di riferimento certi.
 
 PRODOTTI CONFEZIONATI O DI MARCA:
-Se riconosci un prodotto confezionato, industriale, o di marca (es. bastoncini di pesce, snack, merendine, biscotti specifici, surgelati), USA LO STRUMENTO web_search per cercare i valori nutrizionali REALI del prodotto. Cerca ad esempio "valori nutrizionali [nome prodotto] [marca]" o "[nome prodotto] tabella nutrizionale per 100g". I prodotti industriali hanno valori molto diversi da quelli generici — non tirare a indovinare, cerca online.
+Se riconosci un prodotto confezionato/industriale, usa i valori nutrizionali tipici per quella CATEGORIA di prodotto (es. bastoncini di pesce impanati: ~15-17g carbo/100g, merendine: ~55-65g carbo/100g). NON usare i valori dell'ingrediente base (es. non usare i carbo della mozzarella pura per degli stick di mozzarella impanati). Nelle note, suggerisci all'utente di verificare sull'etichetta.
 
 REGOLA FONDAMENTALE PER PASTA, RISO, CEREALI, LEGUMI:
 Questi alimenti hanno valori nutrizionali MOLTO diversi tra crudo e cotto. DEVI SEMPRE specificare lo stato nel campo "stato_cottura":
@@ -317,19 +317,18 @@ Se non riesci a leggere chiaramente un valore, metti null. Il campo più importa
     const isFoodAnalysis = !!body.imageBase64 || !!body.textDescription;
     const isLabelReading = body.analysisType === 'read-label';
     const isPhotoAnalysis = !!body.imageBase64;
+    const isTextOnly = !!body.textDescription && !body.imageBase64;
 
-    // Per analisi cibo (foto o testo) e lettura etichetta: usa Sonnet + web_search
+    // Foto cibo/etichetta → Sonnet (serve vision). Testo puro → Haiku (più veloce)
+    const model = (isPhotoAnalysis || isLabelReading) ? 'claude-sonnet-4-6' : 
+                  isTextOnly ? 'claude-haiku-4-5-20251001' :
+                  (body.analysisType === 'pattern-analysis' || body.analysisType === 'medico-chat') ? 'claude-haiku-4-5-20251001' : 'claude-haiku-4-5-20251001';
+
     const payloadObj = {
-      model: (isFoodAnalysis || isLabelReading) ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001',
-      max_tokens: body.analysisType === 'pattern-analysis' ? 2000 : ((isFoodAnalysis || isLabelReading) ? 2000 : (body.analysisType === 'medico-chat' ? 1200 : 1000)),
+      model,
+      max_tokens: body.analysisType === 'pattern-analysis' ? 2000 : ((isFoodAnalysis || isLabelReading) ? 1500 : (body.analysisType === 'medico-chat' ? 1200 : 1000)),
       messages
     };
-
-    // Aggiungi web_search per analisi cibo — permette a Claude di cercare
-    // valori nutrizionali reali per prodotti confezionati/di marca
-    if (isFoodAnalysis) {
-      payloadObj.tools = [{ type: 'web_search_20250305', name: 'web_search' }];
-    }
 
     const payload = JSON.stringify(payloadObj);
 
@@ -351,7 +350,7 @@ Se non riesci a leggere chiaramente un valore, metti null. Il campo più importa
         res.on('end', () => resolve(data));
       });
       req.on('error', e => reject(e));
-      req.setTimeout(45000, () => { req.destroy(); reject(new Error('Timeout')); });
+      req.setTimeout(25000, () => { req.destroy(); reject(new Error('Timeout')); });
       req.write(payload);
       req.end();
     });
