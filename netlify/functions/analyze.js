@@ -21,45 +21,86 @@ exports.handler = async function(event, context) {
 
     let messages;
 
-    // ── Modalità 1: analisi foto pasto ───────────────────────────────────────
-    if (body.imageBase64) {
-      const { imageBase64, mediaType } = body;
-      messages = [{
-        role: 'user',
-        content: [
-          { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
-          { type: 'text', text: `Sei un nutrizionista esperto specializzato in conteggio carboidrati per pazienti diabetici. Analizza questa foto con la massima precisione possibile.
+    // ── Modalità 1a: analisi foto pasto ──────────────────────────────────────
+    // ── Modalità 1b: descrizione testuale pasto (senza foto) ─────────────────
+    if (body.imageBase64 || body.textDescription) {
 
-METODO DI STIMA DELLE PORZIONI:
-Prima di dare i numeri, ragiona usando riferimenti di scala visibili nella foto:
-- Un piatto piano standard ha un diametro di circa 26-28 cm
-- Un piatto fondo standard ha un diametro di circa 20-22 cm
-- Posate standard: un cucchiaio ha un manico lungo circa 18-20 cm, una forchetta circa 19-20 cm
-- Se è visibile una mano, considera che un palmo è largo circa 8-9 cm
-- Un bicchiere standard contiene circa 200-250 ml
-- Una fetta di pane standard pesa circa 25-30g
-- Una porzione di pasta cotta visibile su un piatto è tipicamente 70-100g (pasta cruda corrisponde a circa il 40% del peso cotto)
+      const FOOD_ANALYSIS_PROMPT = `Sei un nutrizionista clinico esperto, specializzato in conteggio carboidrati per pazienti diabetici di tipo 1.
 
-Usa questi riferimenti per stimare il volume/peso reale di ogni alimento, non andare a stima generica. Se non ci sono riferimenti di scala chiari, usa le porzioni standard italiane più comuni come base.
+OBIETTIVO PRINCIPALE:
+Il dato PIÙ IMPORTANTE è "carbo_per_100g": DEVE essere il valore nutrizionale REALE dell'alimento, preso dalle tabelle nutrizionali ufficiali (CREA/INRAN, etichette, banche dati). NON stimare: usa valori di riferimento certi.
 
-DATI RICHIESTI PER OGNI ALIMENTO:
-- Nome alimento
-- Quantità stimata in grammi (basata sui riferimenti di scala sopra)
-- Carboidrati per 100g
-- Carboidrati totali per la porzione
-- Proteine per 100g
-- Grassi per 100g
-- Fibre per 100g
-- Calorie per 100g
-- Categoria: "dolce" (biscotti, frutta, succhi, cereali, dolci) o "salato" (pasta, pane, riso, verdure, carne, formaggi)
-- Indice glicemico: "lento" (pasta, legumi, riso basmati, verdure, cereali integrali), "medio" (riso bianco, frutta matura, pane integrale, patate bollite), "veloce" (focaccia, pizza, pane bianco, dolci, succhi, cornetti, crackers, patate fritte, riso soffiato). Classifica in base al tipo di carboidrato e alla cottura/lavorazione.
+REGOLA FONDAMENTALE PER PASTA, RISO, CEREALI, LEGUMI:
+Questi alimenti hanno valori nutrizionali MOLTO diversi tra crudo e cotto. DEVI SEMPRE specificare lo stato nel campo "stato_cottura":
+- Pasta CRUDA: ~70-75g carbo/100g → Pasta COTTA: ~25-31g carbo/100g (dipende dal formato)
+- Riso CRUDO: ~78-80g carbo/100g → Riso COTTO: ~28-32g carbo/100g
+- Legumi SECCHI: ~45-60g carbo/100g → Legumi COTTI: ~15-22g carbo/100g
+- Couscous CRUDO: ~70g carbo/100g → Couscous COTTO: ~23g carbo/100g
+Se il paziente indica il peso CRUDO, i carbo_per_100g devono riferirsi al prodotto CRUDO. Se indica il peso COTTO (o dalla foto si vede nel piatto), usa i valori del COTTO.
+Nel campo "nome" specifica sempre "(cotto/a)" o "(crudo/a)" — es. "Spaghetti cotti", "Riso basmati crudo".
 
-I valori nutrizionali per 100g devono riferirsi a valori standard noti per quell'alimento (tabelle nutrizionali italiane/CREA quando possibile), non stime approssimative.
+VALORI DI RIFERIMENTO carbo_per_100g (USA QUESTI, NON INVENTARE):
+- Pasta di semola cotta: 30.3g | cruda: 72g
+- Pasta integrale cotta: 26.7g | cruda: 66g
+- Riso bianco cotto: 28.7g | crudo: 80g
+- Riso basmati cotto: 28g | crudo: 78g
+- Pane bianco: 49g | Pane integrale: 44g
+- Focaccia/pizza bianca: 52-54g
+- Patate bollite: 16g | Patate fritte: 29g
+- Banana (con buccia): 15.5g | (senza buccia): 20.1g
+- Mela: 11g | Arancia: 8g
+- Cornetto semplice: 48g | Cornetto farcito: 52-58g
+- Biscotti frollini: 68-72g
+- Latte intero: 4.7g | Yogurt bianco: 4.3g
+- Gelato: 24-33g (varia molto per tipo)
+Se conosci il valore specifico più preciso per l'alimento in foto, usalo. In caso di dubbio, preferisci la fonte CREA/INRAN.
 
-Rispondi SOLO con JSON valido senza markdown, in questo formato esatto:
-{"alimenti":[{"nome":"nome alimento","quantita_g":150,"carbo_per_100g":30,"carbo_g":45,"proteine_per_100g":5,"grassi_per_100g":2,"fibre_per_100g":1.5,"kcal_per_100g":140,"categoria":"dolce|salato","indice_glicemico":"lento|medio|veloce"}],"totale_carbo_g":45,"totale_proteine_g":7.5,"totale_grassi_g":3,"totale_fibre_g":2.3,"totale_kcal":210,"note":"nota opzionale su eventuali incertezze nella stima"}` }
-        ]
-      }];
+STIMA DELLE PORZIONI${body.imageBase64 ? ' (DALLA FOTO)' : ''}:
+${body.imageBase64 ? `Usa riferimenti di scala visibili nella foto:
+- Piatto piano standard: diametro 26-28 cm
+- Piatto fondo standard: diametro 20-22 cm  
+- Posate standard: forchetta ~20 cm, cucchiaio ~18 cm
+- Palmo di una mano: ~8-9 cm di larghezza
+- Bicchiere standard: 200-250 ml
+- Fetta di pane: 25-30g
+- Porzione tipica di pasta cotta nel piatto: 180-250g (= 70-100g di pasta cruda)
+Se non ci sono riferimenti di scala, usa porzioni standard italiane.` : 'Il paziente ha descritto il pasto a parole. Chiedi conferma del peso se ambiguo. Se indica solo il nome dell\'alimento senza peso, usa le porzioni standard italiane più comuni.'}
+
+FORMATO RISPOSTA — rispondi SOLO con JSON valido senza markdown:
+{"alimenti":[{"nome":"Spaghetti cotti","quantita_g":220,"carbo_per_100g":30.3,"carbo_g":66.7,"stato_cottura":"cotto","proteine_per_100g":5.3,"grassi_per_100g":0.4,"fibre_per_100g":1.2,"kcal_per_100g":137,"categoria":"salato","indice_glicemico":"lento"}],"totale_carbo_g":66.7,"totale_proteine_g":11.7,"totale_grassi_g":0.9,"totale_fibre_g":2.6,"totale_kcal":301,"note":"Valori riferiti alla pasta cotta. Peso crudo stimato: ~88g."}
+
+CAMPI PER OGNI ALIMENTO:
+- nome: nome preciso con stato (cotto/crudo) quando rilevante
+- quantita_g: peso stimato in grammi
+- carbo_per_100g: valore da tabelle nutrizionali (NON stimato)
+- carbo_g: carbo totali della porzione = (quantita_g × carbo_per_100g) / 100
+- stato_cottura: "cotto" | "crudo" | null (per alimenti dove non si applica)
+- proteine_per_100g, grassi_per_100g, fibre_per_100g, kcal_per_100g
+- categoria: "dolce" | "salato"
+- indice_glicemico: "lento" (pasta, legumi, riso basmati, verdure, cereali integrali) | "medio" (riso bianco, frutta matura, pane integrale, patate bollite) | "veloce" (focaccia, pizza, pane bianco, dolci, succhi, cornetti, crackers, patate fritte)`;
+
+      if (body.imageBase64) {
+        const { imageBase64, mediaType } = body;
+        messages = [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
+            { type: 'text', text: FOOD_ANALYSIS_PROMPT }
+          ]
+        }];
+      } else {
+        // Modalità testo: il paziente descrive il pasto
+        const descrizione = body.textDescription;
+        messages = [{
+          role: 'user',
+          content: `${FOOD_ANALYSIS_PROMPT}
+
+DESCRIZIONE DEL PASTO DAL PAZIENTE:
+"${descrizione}"
+
+Analizza la descrizione, identifica ogni alimento e applica i valori nutrizionali da tabelle ufficiali. Se il paziente indica un peso, usalo. Se non indica il peso, usa porzioni standard italiane e segnalalo nelle note.`
+        }];
+      }
 
     // ── Modalità 2: calcolo rapporto insulina/carbo ──────────────────────────
     } else if (body.analysisType === 'insulin-ratio') {
