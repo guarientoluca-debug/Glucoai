@@ -7,8 +7,4 @@ schedule = "*/15 * * * *"
 [functions."weekly-dose-suggestion"]
   schedule = "0 9 * * 0"
 
-[functions."meal-feedback"]
-  schedule = "*/30 * * * *"
-
-[functions."hypo-predict"]
-  schedule = "*/15 * * * *"
+# meal-feedback e hypo-predict gestiti da cron-job.org
