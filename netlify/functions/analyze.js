@@ -1,4 +1,8 @@
 const https = require('https');
+const { createClient } = require('@supabase/supabase-js');
+
+const SUPABASE_URL = 'https://zynytvhmlnvlvswuhtse.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 exports.handler = async function(event, context) {
   const headers = {
@@ -42,6 +46,24 @@ Se non riesci a leggere chiaramente un valore, metti null. Il campo più importa
     // ── Modalità 1a: analisi foto pasto ──────────────────────────────────────
     // ── Modalità 1b: descrizione testuale pasto (senza foto) ─────────────────
     } else if (body.imageBase64 || body.textDescription) {
+
+      // Cerca correzioni nutrizionali nel DB condiviso
+      let correzioniDb = '';
+      if (SUPABASE_KEY) {
+        try {
+          const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+          const { data: corrections } = await supabase
+            .from('food_corrections')
+            .select('nome_normalizzato, carbo_per_100g, proteine_per_100g, grassi_per_100g, kcal_per_100g, conferme')
+            .gte('conferme', 1)
+            .order('conferme', { ascending: false })
+            .limit(50);
+          if (corrections?.length > 0) {
+            correzioniDb = '\n\nVALORI NUTRIZIONALI VALIDATI DALLA COMMUNITY (usa questi con priorità rispetto alle stime):\n' +
+              corrections.map(c => `- ${c.nome_normalizzato}: ${c.carbo_per_100g}g carbo/100g${c.conferme > 1 ? ` (${c.conferme} conferme)` : ''}`).join('\n');
+          }
+        } catch(e) { console.log('Errore food_corrections lookup:', e.message); }
+      }
 
       const FOOD_ANALYSIS_PROMPT = `Sei un nutrizionista clinico esperto, specializzato in conteggio carboidrati per pazienti diabetici di tipo 1.
 
@@ -106,7 +128,7 @@ CAMPI PER OGNI ALIMENTO:
           role: 'user',
           content: [
             { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
-            { type: 'text', text: FOOD_ANALYSIS_PROMPT }
+            { type: 'text', text: FOOD_ANALYSIS_PROMPT + correzioniDb }
           ]
         }];
       } else {
@@ -114,7 +136,7 @@ CAMPI PER OGNI ALIMENTO:
         const descrizione = body.textDescription;
         messages = [{
           role: 'user',
-          content: `${FOOD_ANALYSIS_PROMPT}
+          content: `${FOOD_ANALYSIS_PROMPT}${correzioniDb}
 
 DESCRIZIONE DEL PASTO DAL PAZIENTE:
 "${descrizione}"
