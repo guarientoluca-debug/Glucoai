@@ -55,7 +55,7 @@ Se non riesci a leggere chiaramente un valore, metti null. Il campo più importa
           const { data: corrections } = await supabase
             .from('food_corrections')
             .select('nome_normalizzato, carbo_per_100g, proteine_per_100g, grassi_per_100g, kcal_per_100g, conferme')
-            .gte('conferme', 1)
+            .gte('conferme', 2)
             .order('conferme', { ascending: false })
             .limit(50);
           if (corrections?.length > 0) {
