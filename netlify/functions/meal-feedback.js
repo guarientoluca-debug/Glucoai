@@ -82,7 +82,7 @@ exports.handler = async (event) => {
     } else {
       // === PRIORITA 2: Libre a ~3h ===
       // Solo se il pasto e tra 3h e 3h30 fa
-      if (mealAge < 3 || mealAge > 3.5) {
+      if (mealAge < 3 || mealAge > 4) {
         results.push({ meal_id: meal.id, skipped: 'waiting_3h', mealAge: Math.round(mealAge * 10) / 10 });
         continue;
       }
