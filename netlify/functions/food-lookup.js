@@ -179,12 +179,21 @@ exports.handler = async (event) => {
       .select('*')
       .eq('user_id', userId)
       .ilike('nome', `%${searchTerm}%`)
-      .order('verificato', { ascending: false }) // CREA prima
+      .order('verificato', { ascending: false })
+      .order('ultimo_uso', { ascending: false, nullsFirst: false })
       .limit(10);
 
     if (fuzzyMatches?.length > 0) {
-      // Il primo risultato verificato ha priorita
-      const best = fuzzyMatches[0];
+      // Priorità: paziente corretto > CREA > AI
+      const sortedMatches = fuzzyMatches.sort((a, b) => {
+        const priority = (item) => {
+          if (item.fonte === 'etichetta' || item.fonte === 'manuale' || item.fonte === 'openfoodfacts' || item.fonte === 'medico') return 0;
+          if (item.fonte === 'crea') return 1;
+          return 2; // ai o null
+        };
+        return priority(a) - priority(b);
+      });
+      const best = sortedMatches[0];
 
       await supabase.from('alimenti')
         .update({ ultimo_uso: new Date().toISOString() })
