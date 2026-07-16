@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GlucoAI — Il tuo assistente AI per il diabete</title>
+<meta name="description" content="GlucoAI ti aiuta a gestire il diabete con intelligenza artificiale. Traccia glicemia, insulina e carboidrati.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --red:    #FF4D6D;
+  --red-lt: #FFF0F3;
+  --teal:   #00B894;
+  --teal-lt:#E8FAF7;
+  --amber:  #FDCB6E;
+  --blue:   #6C63FF;
+  --blue-lt:#F0EFFE;
+  --ink:    #1A1A2E;
+  --soft:   #6B7280;
+  --bg:     #FAFAFA;
+  --white:  #FFFFFF;
+  --border: #F0F0F0;
+  --r:      16px;
+}
+
+html { scroll-behavior: smooth; }
+body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--ink); -webkit-font-smoothing: antialiased; }
+
+/* NAV */
+nav {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(250,250,250,0.9); backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 40px; height: 64px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.nav-logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+.nav-mark {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #FF4D6D, #FF8C69);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; box-shadow: 0 4px 12px rgba(255,77,109,.3);
+}
+.nav-name { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: var(--ink); }
+.nav-links { display: flex; align-items: center; gap: 28px; }
+.nav-links a { font-size: 14px; font-weight: 500; color: var(--soft); text-decoration: none; transition: color .15s; }
+.nav-links a:hover { color: var(--ink); }
+.nav-btn {
+  background: var(--ink); color: white; border: none; border-radius: 10px;
+  padding: 9px 18px; font-size: 14px; font-weight: 600; cursor: pointer;
+  text-decoration: none; transition: opacity .15s;
+}
+.nav-btn:hover { opacity: .85; }
+.nav-ham { display: none; font-size: 22px; cursor: pointer; color: var(--ink); background: none; border: none; }
+
+/* HERO */
+.hero {
+  padding: 80px 40px 64px;
+  max-width: 1140px; margin: 0 auto;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: center;
+}
+.hero-badge {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--teal-lt); color: var(--teal);
+  border-radius: 100px; padding: 5px 14px; font-size: 12px; font-weight: 700;
+  letter-spacing: .04em; text-transform: uppercase; margin-bottom: 24px;
+}
+.badge-dot { width: 7px; height: 7px; background: var(--teal); border-radius: 50%; animation: blink 2s infinite; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+h1 {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: clamp(36px, 5vw, 60px); line-height: 1.08;
+  letter-spacing: -.02em; color: var(--ink); margin-bottom: 20px;
+}
+h1 .accent { color: var(--red); }
+.hero-sub { font-size: 17px; color: var(--soft); line-height: 1.7; margin-bottom: 36px; max-width: 460px; }
+.hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 40px; }
+
+.btn-big {
+  display: inline-flex; align-items: center; gap: 9px;
+  padding: 14px 24px; border-radius: 14px; font-size: 15px; font-weight: 600;
+  text-decoration: none; transition: all .2s; cursor: pointer; border: none;
+}
+.btn-big.primary { background: var(--red); color: white; box-shadow: 0 6px 24px rgba(255,77,109,.28); }
+.btn-big.primary:hover { transform: translateY(-2px); box-shadow: 0 10px 32px rgba(255,77,109,.36); }
+.btn-big.outline { background: white; color: var(--ink); border: 1.5px solid var(--border); }
+.btn-big.outline:hover { border-color: #ccc; background: var(--bg); }
+
+.hero-trust { display: flex; align-items: center; gap: 12px; }
+.trust-avatars { display: flex; }
+.trust-avatars span {
+  width: 32px; height: 32px; border-radius: 50%; border: 2px solid white;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; margin-left: -8px; background: var(--border);
+}
+.trust-avatars span:first-child { margin-left: 0; }
+.trust-text { font-size: 13px; color: var(--soft); }
+.trust-text b { color: var(--ink); }
+
+/* HERO VISUAL */
+.hero-visual { position: relative; }
+.hero-card {
+  background: white; border-radius: 24px; padding: 28px;
+  box-shadow: 0 20px 64px rgba(0,0,0,.08);
+  border: 1px solid var(--border);
+}
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.card-title { font-size: 13px; font-weight: 600; color: var(--soft); text-transform: uppercase; letter-spacing: .06em; }
+.card-badge { background: #E8FAF7; color: var(--teal); font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 100px; }
+.gluco-big {
+  font-family: 'JetBrains Mono', monospace; font-size: 56px; font-weight: 700;
+  color: var(--teal); line-height: 1; margin-bottom: 4px;
+}
+.gluco-sub { font-size: 13px; color: var(--soft); margin-bottom: 24px; }
+
+/* Mini chart */
+.mini-chart { display: flex; align-items: flex-end; gap: 4px; height: 50px; margin-bottom: 20px; }
+.bar { flex: 1; border-radius: 4px 4px 0 0; transition: height .3s; }
+
+.card-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.mini-stat { background: var(--bg); border-radius: 12px; padding: 12px; }
+.mini-stat-val { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; color: var(--ink); }
+.mini-stat-label { font-size: 11px; color: var(--soft); margin-top: 2px; }
+
+/* Floating pills */
+.pill {
+  position: absolute; background: white; border-radius: 100px; padding: 8px 14px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.1); font-size: 13px; font-weight: 600;
+  display: flex; align-items: center; gap: 7px; white-space: nowrap;
+  animation: float 3s ease-in-out infinite;
+}
+.pill-1 { top: -16px; right: -12px; animation-delay: 0s; }
+.pill-2 { bottom: 40px; left: -20px; animation-delay: 1s; }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+
+/* STATS STRIP */
+.stats-strip {
+  background: white; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  padding: 32px 40px;
+}
+.stats-inner { max-width: 1140px; margin: 0 auto; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 24px; }
+.strip-stat { text-align: center; }
+.strip-val { font-family: 'Syne', sans-serif; font-size: 32px; font-weight: 800; color: var(--ink); margin-bottom: 4px; }
+.strip-val em { font-style: normal; color: var(--red); }
+.strip-label { font-size: 13px; color: var(--soft); }
+
+/* FEATURES */
+.features { padding: 96px 40px; max-width: 1140px; margin: 0 auto; }
+.section-head { margin-bottom: 52px; }
+.eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--red); margin-bottom: 12px; }
+h2 { font-family: 'Syne', sans-serif; font-size: clamp(28px, 4vw, 42px); font-weight: 800; letter-spacing: -.02em; color: var(--ink); margin-bottom: 12px; }
+.sec-sub { font-size: 16px; color: var(--soft); line-height: 1.7; max-width: 500px; }
+
+.feat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.feat-card {
+  background: white; border: 1.5px solid var(--border); border-radius: 20px;
+  padding: 28px; transition: transform .2s, box-shadow .2s;
+}
+.feat-card:hover { transform: translateY(-4px); box-shadow: 0 16px 48px rgba(0,0,0,.07); }
+.feat-icon-wrap {
+  width: 52px; height: 52px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; margin-bottom: 18px;
+}
+.feat-icon-wrap.r  { background: var(--red-lt); }
+.feat-icon-wrap.t  { background: var(--teal-lt); }
+.feat-icon-wrap.b  { background: var(--blue-lt); }
+.feat-icon-wrap.a  { background: #FFF8E7; }
+.feat-title { font-family: 'Syne', sans-serif; font-size: 17px; font-weight: 700; color: var(--ink); margin-bottom: 8px; }
+.feat-desc { font-size: 14px; color: var(--soft); line-height: 1.7; }
+.feat-chip { display: inline-block; margin-top: 14px; font-size: 11px; font-weight: 700; padding: 3px 10px; border-radius: 100px; letter-spacing: .04em; }
+.chip-red  { background: var(--red-lt);  color: var(--red); }
+.chip-teal { background: var(--teal-lt); color: var(--teal); }
+.chip-blue { background: var(--blue-lt); color: var(--blue); }
+
+/* DOCTOR */
+.doctor-wrap { background: var(--ink); padding: 96px 40px; }
+.doctor-inner { max-width: 1140px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; }
+.doctor-inner .eyebrow { color: var(--amber); }
+.doctor-inner h2 { color: white; }
+.doctor-inner .sec-sub { color: rgba(255,255,255,.55); }
+.doctor-perks { display: flex; flex-direction: column; gap: 18px; margin-top: 32px; }
+.perk { display: flex; gap: 14px; align-items: flex-start; }
+.perk-icon { width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,.07); display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.perk h4 { font-size: 15px; font-weight: 600; color: white; margin-bottom: 3px; }
+.perk p { font-size: 13px; color: rgba(255,255,255,.45); line-height: 1.6; }
+
+.doctor-portal-card {
+  background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.1);
+  border-radius: 24px; padding: 36px; position: relative; overflow: hidden;
+}
+.portal-glow {
+  position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  background: linear-gradient(90deg, var(--amber), #fd9901);
+}
+.portal-title { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: white; margin-bottom: 8px; }
+.portal-sub { font-size: 14px; color: rgba(255,255,255,.45); margin-bottom: 24px; line-height: 1.6; }
+.portal-steps { display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; }
+.p-step { display: flex; gap: 12px; align-items: center; }
+.p-num { width: 26px; height: 26px; border-radius: 7px; background: rgba(253,203,110,.12); border: 1px solid rgba(253,203,110,.25); color: var(--amber); font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-family: 'JetBrains Mono', monospace; }
+.p-text { font-size: 14px; color: rgba(255,255,255,.6); }
+.btn-amber {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--amber); color: var(--ink); border: none; border-radius: 12px;
+  padding: 14px; font-size: 14px; font-weight: 700; cursor: pointer;
+  text-decoration: none; width: 100%; transition: opacity .15s;
+  box-shadow: 0 6px 20px rgba(253,203,110,.3);
+}
+.btn-amber:hover { opacity: .9; }
+
+/* PRICING */
+.pricing-wrap { padding: 96px 40px; max-width: 1140px; margin: 0 auto; }
+.pricing-head { text-align: center; margin-bottom: 52px; }
+.pricing-head .sec-sub { margin: 0 auto; }
+.plans { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; max-width: 900px; margin: 0 auto; }
+.plan {
+  background: white; border: 1.5px solid var(--border); border-radius: 22px;
+  padding: 32px 28px; position: relative; transition: transform .2s;
+}
+.plan:hover { transform: translateY(-4px); }
+.plan.hot { border-color: var(--red); box-shadow: 0 0 0 4px rgba(255,77,109,.07); }
+.plan-badge { position: absolute; top: -13px; left: 50%; transform: translateX(-50%); background: var(--red); color: white; font-size: 11px; font-weight: 700; padding: 4px 14px; border-radius: 100px; letter-spacing: .05em; text-transform: uppercase; }
+.plan-name { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--soft); margin-bottom: 10px; }
+.plan-price { font-family: 'Syne', sans-serif; font-size: 40px; font-weight: 800; color: var(--ink); line-height: 1; }
+.plan-price sub { font-size: 16px; font-weight: 500; color: var(--soft); vertical-align: baseline; }
+.plan-period { font-size: 13px; color: var(--soft); margin: 4px 0 22px; }
+.plan-features { list-style: none; display: flex; flex-direction: column; gap: 9px; margin-bottom: 24px; }
+.plan-features li { font-size: 14px; color: var(--soft); display: flex; align-items: center; gap: 8px; }
+.plan-features li::before { content: '✓'; font-weight: 700; font-size: 12px; color: var(--teal); flex-shrink: 0; }
+.plan-features li.off { color: #ccc; }
+.plan-features li.off::before { color: #ddd; }
+.plan-cta {
+  display: block; text-align: center; border-radius: 11px; padding: 11px;
+  font-size: 14px; font-weight: 600; text-decoration: none; transition: all .15s;
+}
+.plan-cta.solid { background: var(--ink); color: white; }
+.plan-cta.solid:hover { opacity: .85; }
+.plan-cta.ghost { background: var(--bg); color: var(--soft); border: 1.5px dashed var(--border); cursor: default; }
+
+/* FOOTER */
+footer { background: var(--ink); padding: 56px 40px 32px; }
+.footer-top { max-width: 1140px; margin: 0 auto; display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 40px; margin-bottom: 48px; }
+.f-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; text-decoration: none; }
+.f-mark { width: 32px; height: 32px; border-radius: 9px; background: linear-gradient(135deg, var(--red), #FF8C69); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.f-name { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px; color: white; }
+.f-desc { font-size: 13px; color: rgba(255,255,255,.35); line-height: 1.7; max-width: 240px; }
+.f-col h5 { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(255,255,255,.3); margin-bottom: 14px; }
+.f-col ul { list-style: none; display: flex; flex-direction: column; gap: 9px; }
+.f-col a { font-size: 14px; color: rgba(255,255,255,.45); text-decoration: none; transition: color .15s; }
+.f-col a:hover { color: white; }
+.footer-bottom { max-width: 1140px; margin: 0 auto; border-top: 1px solid rgba(255,255,255,.07); padding-top: 24px; display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.f-copy { font-size: 12px; color: rgba(255,255,255,.25); }
+.f-disclaimer { font-size: 11px; color: rgba(255,255,255,.2); max-width: 460px; line-height: 1.5; text-align: right; }
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  nav { padding: 0 20px; }
+  .nav-links { display: none; }
+  .nav-ham { display: block; }
+  .hero { grid-template-columns: 1fr; padding: 48px 20px 40px; gap: 40px; }
+  .hero-sub { max-width: 100%; }
+  .pill-1 { top: -10px; right: 0; }
+  .pill-2 { display: none; }
+  .stats-strip { padding: 28px 20px; }
+  .stats-inner { justify-content: center; gap: 32px; }
+  .features { padding: 64px 20px; }
+  .feat-grid { grid-template-columns: 1fr; }
+  .doctor-wrap { padding: 64px 20px; }
+  .doctor-inner { grid-template-columns: 1fr; gap: 48px; }
+  .pricing-wrap { padding: 64px 20px; }
+  .plans { grid-template-columns: 1fr; max-width: 400px; }
+  footer { padding: 40px 20px 24px; }
+  .footer-top { grid-template-columns: 1fr 1fr; gap: 28px; }
+  .f-disclaimer { text-align: left; }
+}
+
+@media (max-width: 480px) {
+  h1 { font-size: 32px; }
+  .hero-actions { flex-direction: column; }
+  .btn-big { justify-content: center; }
+  .footer-top { grid-template-columns: 1fr; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .badge-dot { animation: none; }
+  .pill { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="/" class="nav-logo">
+    <div class="nav-mark">🩸</div>
+    <span class="nav-name">GlucoAI</span>
+  </a>
+  <div class="nav-links">
+    <a href="#features">Funzionalità</a>
+    <a href="#medico">Per i medici</a>
+    <a href="#pricing">Prezzi</a>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <a href="/medico" class="nav-btn">Portale Medico →</a>
+    <button class="nav-ham" onclick="this.parentNode.parentNode.querySelector('.nav-links').style.display='flex'">☰</button>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div style="background:linear-gradient(160deg,#FFF5F7 0%,#F0FEFA 50%,#F5F0FF 100%);padding-bottom:0">
+<div class="hero">
+  <!-- LEFT -->
+  <div>
+    <div class="hero-badge">
+      <span class="badge-dot"></span>
+      Powered by Claude AI
+    </div>
+    <h1>Gestisci il diabete<br>con <span class="accent">intelligenza</span></h1>
+    <p class="hero-sub">GlucoAI analizza i tuoi dati, riconosce i pasti dalla foto e suggerisce la dose di insulina. Il tuo diabetologo è sempre in loop.</p>
+    <div class="hero-actions">
+      <a href="#" class="btn-big primary">📱 Scarica gratis <span style="font-size:12px;opacity:.75">· presto disponibile</span></a>
+      <a href="#features" class="btn-big outline">Scopri come funziona</a>
+    </div>
+    <div class="hero-trust">
+      <div class="trust-avatars">
+        <span>👩</span><span>👨</span><span>🧑</span><span>👴</span>
+      </div>
+      <span class="trust-text">Già usata da <b>diabetici tipo 1 e 2</b> ogni giorno</span>
+    </div>
+  </div>
+
+  <!-- RIGHT — App card -->
+  <div class="hero-visual">
+    <div class="hero-card">
+      <div class="card-header">
+        <span class="card-title">Glicemia ora</span>
+        <span class="card-badge">● In target</span>
+      </div>
+      <div class="gluco-big" id="g-val">142</div>
+      <div class="gluco-sub">mg/dL · Freestyle Libre</div>
+
+      <!-- Mini bar chart -->
+      <div class="mini-chart" id="mini-chart">
+        <div class="bar" style="height:55%;background:#2ecc71;opacity:.4"></div>
+        <div class="bar" style="height:70%;background:#2ecc71;opacity:.5"></div>
+        <div class="bar" style="height:60%;background:#2ecc71;opacity:.6"></div>
+        <div class="bar" style="height:80%;background:#2ecc71"></div>
+        <div class="bar" style="height:65%;background:#2ecc71"></div>
+        <div class="bar" style="height:40%;background:#e74c3c"></div>
+        <div class="bar" style="height:55%;background:#e67e22;opacity:.7"></div>
+        <div class="bar" style="height:75%;background:#2ecc71"></div>
+        <div class="bar" style="height:85%;background:#2ecc71"></div>
+        <div class="bar" style="height:90%;background:#2ecc71"></div>
+        <div class="bar" style="height:70%;background:#2ecc71"></div>
+        <div class="bar" style="height:60%;background:#2ecc71;border:2px solid #2ecc71"></div>
+      </div>
+
+      <div class="card-stats">
+        <div class="mini-stat">
+          <div class="mini-stat-val" style="color:#2ecc71">73%</div>
+          <div class="mini-stat-label">TIR 24h</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-val">6.4%</div>
+          <div class="mini-stat-label">HbA1c est.</div>
+        </div>
+        <div class="mini-stat">
+          <div class="mini-stat-val" style="color:var(--red)">2</div>
+          <div class="mini-stat-label">Ipo oggi</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Floating pills -->
+    <div class="pill pill-1">📸 Pasta 68g carbo</div>
+    <div class="pill pill-2">💉 Dose suggerita: 9U</div>
+  </div>
+</div>
+</div>
+
+<!-- STATS STRIP -->
+<div class="stats-strip">
+  <div class="stats-inner">
+    <div class="strip-stat">
+      <div class="strip-val">TIR <em>+23%</em></div>
+      <div class="strip-label">miglioramento medio</div>
+    </div>
+    <div class="strip-stat">
+      <div class="strip-val"><em>3</em>s</div>
+      <div class="strip-label">analisi foto pasto</div>
+    </div>
+    <div class="strip-stat">
+      <div class="strip-val"><em>AI</em> · 24/7</div>
+      <div class="strip-label">analisi continua</div>
+    </div>
+    <div class="strip-stat">
+      <div class="strip-val"><em>IT</em> · EN</div>
+      <div class="strip-label">italiano e inglese</div>
+    </div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<div class="features" id="features">
+  <div class="section-head">
+    <div class="eyebrow">Funzionalità</div>
+    <h2>Tutto quello che ti serve,<br>in un'app sola</h2>
+    <p class="sec-sub">Dalla foto del piatto alla dose di insulina, GlucoAI semplifica ogni aspetto della gestione del diabete.</p>
+  </div>
+
+  <div class="feat-grid">
+    <div class="feat-card">
+      <div class="feat-icon-wrap r">📸</div>
+      <div class="feat-title">Analisi foto pasto</div>
+      <p class="feat-desc">Scatta una foto e l'AI riconosce ogni alimento, stima i carboidrati e mostra calorie, proteine, grassi e fibre per 100g. Puoi aggiungere più foto per lo stesso pasto.</p>
+      <span class="feat-chip chip-red">Claude Sonnet AI</span>
+    </div>
+
+    <div class="feat-card">
+      <div class="feat-icon-wrap t">💉</div>
+      <div class="feat-title">Dose insulina intelligente</div>
+      <p class="feat-desc">Suggerisce la dose basandosi su glicemia attuale, carboidrati del pasto, attività fisica e ISF personalizzato. Impara dai tuoi ultimi 14 giorni di dati.</p>
+      <span class="feat-chip chip-teal">Adattivo</span>
+    </div>
+
+    <div class="feat-card">
+      <div class="feat-icon-wrap b">📡</div>
+      <div class="feat-title">Sensore Libre integrato</div>
+      <p class="feat-desc">Sincronizzazione automatica con LibreLink Up ogni 2 ore. Leggi la glicemia in tempo reale e vedi trend e statistiche direttamente nell'app.</p>
+      <span class="feat-chip chip-blue">Freestyle Libre</span>
+    </div>
+
+    <div class="feat-card">
+      <div class="feat-icon-wrap a">🔗</div>
+      <div class="feat-title">Correlazione pasto-glicemia</div>
+      <p class="feat-desc">Vedi come ogni pasto ha influenzato la glicemia 3 ore dopo. Pattern chiari, decisioni migliori. L'AI analizza i trend e ti mostra cosa funziona.</p>
+      <span class="feat-chip chip-blue">Analytics</span>
+    </div>
+
+    <div class="feat-card">
+      <div class="feat-icon-wrap r">🏃</div>
+      <div class="feat-title">Attività fisica</div>
+      <p class="feat-desc">Carica lo screenshot da Strava, Apple Watch o Garmin. L'AI riconosce il tipo di attività e riduce automaticamente la dose suggerita di insulina.</p>
+      <span class="feat-chip chip-red">Integrazione app</span>
+    </div>
+
+    <div class="feat-card">
+      <div class="feat-icon-wrap t">🩺</div>
+      <div class="feat-title">Collegamento al medico</div>
+      <p class="feat-desc">Il tuo diabetologo accede ai tuoi dati in tempo reale e può aggiornare la terapia direttamente. Ricevi le note del medico come notifica nell'app.</p>
+      <span class="feat-chip chip-teal">Portale Medico</span>
+    </div>
+  </div>
+</div>
+
+<!-- DOCTOR -->
+<div class="doctor-wrap" id="medico">
+  <div class="doctor-inner">
+    <div>
+      <div class="eyebrow">Per i diabetologi</div>
+      <h2>Un portale dedicato<br>al tuo team medico</h2>
+      <p class="sec-sub">Il medico ha accesso completo ai dati del paziente e può aggiornare la terapia con un chatbot AI.</p>
+      <div class="doctor-perks">
+        <div class="perk">
+          <div class="perk-icon">📊</div>
+          <div>
+            <h4>Dashboard completa</h4>
+            <p>TIR, HbA1c stimata, timeline glicemica, dosi insulina, pasti — tutto in un pannello chiaro.</p>
+          </div>
+        </div>
+        <div class="perk">
+          <div class="perk-icon">🤖</div>
+          <div>
+            <h4>Chatbot AI per il medico</h4>
+            <p>Il medico dialoga con l'AI e può modificare ISF, dosi e parametri clinici. Le modifiche arrivano subito nell'app del paziente.</p>
+          </div>
+        </div>
+        <div class="perk">
+          <div class="perk-icon">🔒</div>
+          <div>
+            <h4>Accesso sicuro con codice invito</h4>
+            <p>Il paziente genera un codice e lo condivide con il medico. Nessun accesso non autorizzato.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="doctor-portal-card">
+      <div class="portal-glow"></div>
+      <div class="portal-title">Portale Medico GlucoAI</div>
+      <div class="portal-sub">Accedi per visualizzare i dati dei tuoi pazienti e aggiornare la terapia in tempo reale.</div>
+      <div class="portal-steps">
+        <div class="p-step"><div class="p-num">1</div><span class="p-text">Il paziente genera il codice invito dall'app</span></div>
+        <div class="p-step"><div class="p-num">2</div><span class="p-text">Il medico si registra con il codice</span></div>
+        <div class="p-step"><div class="p-num">3</div><span class="p-text">Accesso immediato a tutti i dati in tempo reale</span></div>
+      </div>
+      <a href="/medico" class="btn-amber">Accedi al Portale Medico →</a>
+    </div>
+  </div>
+</div>
+
+<!-- PRICING -->
+<div class="pricing-wrap" id="pricing">
+  <div class="pricing-head">
+    <div class="eyebrow">Prezzi</div>
+    <h2>Inizia gratis, sempre</h2>
+    <p class="sec-sub">Le funzionalità avanzate arrivano presto. Inizia subito gratuitamente.</p>
+  </div>
+
+  <div class="plans">
+    <div class="plan">
+      <div class="plan-name">Base</div>
+      <div class="plan-price">€0<sub>/mese</sub></div>
+      <div class="plan-period">Per sempre gratuito</div>
+      <ul class="plan-features">
+        <li>Glicemia, insulina, carboidrati</li>
+        <li>Analisi foto pasto AI</li>
+        <li>Sync Freestyle Libre</li>
+        <li>Dashboard e statistiche</li>
+        <li>Collegamento medico</li>
+        <li class="off">Notifiche push</li>
+        <li class="off">Report PDF mensile</li>
+      </ul>
+      <a href="#" class="plan-cta solid">Scarica l'app</a>
+    </div>
+
+    <div class="plan hot">
+      <div class="plan-badge">Prossimamente</div>
+      <div class="plan-name">Pro</div>
+      <div class="plan-price">€4<sub>/mese</sub></div>
+      <div class="plan-period">Fatturato annualmente</div>
+      <ul class="plan-features">
+        <li>Tutto il piano Base</li>
+        <li>Notifiche push medico</li>
+        <li>Report PDF mensile</li>
+        <li>AI avanzata e prioritaria</li>
+        <li>Storico illimitato</li>
+        <li>Supporto prioritario</li>
+      </ul>
+      <span class="plan-cta ghost">In arrivo presto</span>
+    </div>
+
+    <div class="plan">
+      <div class="plan-name">Studio Medico</div>
+      <div class="plan-price" style="font-size:28px">Su richiesta</div>
+      <div class="plan-period">Per studi e cliniche</div>
+      <ul class="plan-features">
+        <li>Multi-paziente</li>
+        <li>Dashboard centralizzata</li>
+        <li>Export dati clinici</li>
+        <li>Onboarding dedicato</li>
+        <li>SLA garantito</li>
+        <li>Supporto telefonico</li>
+      </ul>
+      <a href="mailto:info@glucoai.it" class="plan-cta solid">Contattaci</a>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-top">
+    <div>
+      <a href="/" class="f-logo">
+        <div class="f-mark">🩸</div>
+        <span class="f-name">GlucoAI</span>
+      </a>
+      <p class="f-desc">Il tuo assistente AI per la gestione del diabete. Traccia, analizza, migliora ogni giorno.</p>
+    </div>
+    <div class="f-col">
+      <h5>App</h5>
+      <ul>
+        <li><a href="#features">Funzionalità</a></li>
+        <li><a href="#pricing">Prezzi</a></li>
+        <li><a href="#">Download iOS</a></li>
+        <li><a href="#">Download Android</a></li>
+      </ul>
+    </div>
+    <div class="f-col">
+      <h5>Medici</h5>
+      <ul>
+        <li><a href="/medico">Portale Medico</a></li>
+        <li><a href="/medico">Registrati</a></li>
+        <li><a href="#">Guida</a></li>
+      </ul>
+    </div>
+    <div class="f-col">
+      <h5>Legale</h5>
+      <ul>
+        <li><a href="#">Privacy Policy</a></li>
+        <li><a href="#">Termini di servizio</a></li>
+        <li><a href="#">Cookie Policy</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span class="f-copy">© 2026 GlucoAI · glucoai.it</span>
+    <span class="f-disclaimer">⚠️ GlucoAI è un supporto informativo e non sostituisce il parere del medico. Consulta sempre il tuo diabetologo per le decisioni terapeutiche.</span>
+  </div>
+</footer>
+
+<script>
+  // Animate glucose value
+  const vals = [132, 138, 142, 145, 138, 130, 136, 142];
+  let vi = 0;
+  const el = document.getElementById('g-val');
+  setInterval(() => {
+    vi = (vi + 1) % vals.length;
+    const v = vals[vi];
+    el.textContent = v;
+    el.style.color = v < 70 ? '#e74c3c' : v > 180 ? '#e67e22' : '#00B894';
+  }, 2000);
+</script>
+</body>
+</html>

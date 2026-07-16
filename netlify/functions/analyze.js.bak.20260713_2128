@@ -1,8 +1,4 @@
 const https = require('https');
-const { createClient } = require('@supabase/supabase-js');
-
-const SUPABASE_URL = 'https://zynytvhmlnvlvswuhtse.supabase.co';
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 exports.handler = async function(event, context) {
   const headers = {
@@ -25,125 +21,45 @@ exports.handler = async function(event, context) {
 
     let messages;
 
-    // ── Modalità 7: lettura etichetta nutrizionale (DEVE stare PRIMA del check imageBase64) ──
-    if (body.analysisType === 'read-label' && body.imageBase64) {
+    // ── Modalità 1: analisi foto pasto ───────────────────────────────────────
+    if (body.imageBase64) {
       const { imageBase64, mediaType } = body;
       messages = [{
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
-          { type: 'text', text: `Leggi la tabella nutrizionale in questa foto di un prodotto alimentare confezionato.
+          { type: 'text', text: `Sei un nutrizionista esperto specializzato in conteggio carboidrati per pazienti diabetici. Analizza questa foto con la massima precisione possibile.
 
-Estrai i valori PER 100g dalla tabella. Se ci sono solo valori "per porzione", converti a per 100g usando il peso della porzione indicato.
+METODO DI STIMA DELLE PORZIONI:
+Prima di dare i numeri, ragiona usando riferimenti di scala visibili nella foto:
+- Un piatto piano standard ha un diametro di circa 26-28 cm
+- Un piatto fondo standard ha un diametro di circa 20-22 cm
+- Posate standard: un cucchiaio ha un manico lungo circa 18-20 cm, una forchetta circa 19-20 cm
+- Se è visibile una mano, considera che un palmo è largo circa 8-9 cm
+- Un bicchiere standard contiene circa 200-250 ml
+- Una fetta di pane standard pesa circa 25-30g
+- Una porzione di pasta cotta visibile su un piatto è tipicamente 70-100g (pasta cruda corrisponde a circa il 40% del peso cotto)
 
-Rispondi SOLO con JSON valido senza markdown:
-{"nome_prodotto":"nome del prodotto se visibile","carbo_per_100g":15.7,"di_cui_zuccheri_per_100g":1.8,"proteine_per_100g":10,"grassi_per_100g":12.9,"fibre_per_100g":0.89,"kcal_per_100g":303,"sale_per_100g":0.89,"porzione_g":125,"note":"eventuali note"}
+Usa questi riferimenti per stimare il volume/peso reale di ogni alimento, non andare a stima generica. Se non ci sono riferimenti di scala chiari, usa le porzioni standard italiane più comuni come base.
 
-Se non riesci a leggere chiaramente un valore, metti null. Il campo più importante è carbo_per_100g — assicurati che sia corretto.` }
+DATI RICHIESTI PER OGNI ALIMENTO:
+- Nome alimento
+- Quantità stimata in grammi (basata sui riferimenti di scala sopra)
+- Carboidrati per 100g
+- Carboidrati totali per la porzione
+- Proteine per 100g
+- Grassi per 100g
+- Fibre per 100g
+- Calorie per 100g
+- Categoria: "dolce" (biscotti, frutta, succhi, cereali, dolci) o "salato" (pasta, pane, riso, verdure, carne, formaggi)
+- Indice glicemico: "lento" (pasta, legumi, riso basmati, verdure, cereali integrali), "medio" (riso bianco, frutta matura, pane integrale, patate bollite), "veloce" (focaccia, pizza, pane bianco, dolci, succhi, cornetti, crackers, patate fritte, riso soffiato). Classifica in base al tipo di carboidrato e alla cottura/lavorazione.
+
+I valori nutrizionali per 100g devono riferirsi a valori standard noti per quell'alimento (tabelle nutrizionali italiane/CREA quando possibile), non stime approssimative.
+
+Rispondi SOLO con JSON valido senza markdown, in questo formato esatto:
+{"alimenti":[{"nome":"nome alimento","quantita_g":150,"carbo_per_100g":30,"carbo_g":45,"proteine_per_100g":5,"grassi_per_100g":2,"fibre_per_100g":1.5,"kcal_per_100g":140,"categoria":"dolce|salato","indice_glicemico":"lento|medio|veloce"}],"totale_carbo_g":45,"totale_proteine_g":7.5,"totale_grassi_g":3,"totale_fibre_g":2.3,"totale_kcal":210,"note":"nota opzionale su eventuali incertezze nella stima"}` }
         ]
       }];
-
-    // ── Modalità 1a: analisi foto pasto ──────────────────────────────────────
-    // ── Modalità 1b: descrizione testuale pasto (senza foto) ─────────────────
-    } else if (body.imageBase64 || body.textDescription) {
-
-      // Cerca correzioni nutrizionali nel DB condiviso
-      let correzioniDb = '';
-      if (SUPABASE_KEY) {
-        try {
-          const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
-          const { data: corrections } = await supabase
-            .from('food_corrections')
-            .select('nome_normalizzato, carbo_per_100g, proteine_per_100g, grassi_per_100g, kcal_per_100g, conferme')
-            .gte('conferme', 2)
-            .order('conferme', { ascending: false })
-            .limit(50);
-          if (corrections?.length > 0) {
-            correzioniDb = '\n\nVALORI NUTRIZIONALI VALIDATI DALLA COMMUNITY (usa questi con priorità rispetto alle stime):\n' +
-              corrections.map(c => `- ${c.nome_normalizzato}: ${c.carbo_per_100g}g carbo/100g${c.conferme > 1 ? ` (${c.conferme} conferme)` : ''}`).join('\n');
-          }
-        } catch(e) { console.log('Errore food_corrections lookup:', e.message); }
-      }
-
-      const FOOD_ANALYSIS_PROMPT = `Sei un nutrizionista clinico esperto, specializzato in conteggio carboidrati per pazienti diabetici di tipo 1.
-
-OBIETTIVO PRINCIPALE:
-Il dato PIÙ IMPORTANTE è "carbo_per_100g": DEVE essere il valore nutrizionale REALE dell'alimento, preso dalle tabelle nutrizionali ufficiali (CREA/INRAN, etichette, banche dati). NON stimare: usa valori di riferimento certi.
-
-PRODOTTI CONFEZIONATI O DI MARCA:
-Se riconosci un prodotto confezionato/industriale, usa i valori nutrizionali tipici per quella CATEGORIA di prodotto (es. bastoncini di pesce impanati: ~15-17g carbo/100g, merendine: ~55-65g carbo/100g). NON usare i valori dell'ingrediente base (es. non usare i carbo della mozzarella pura per degli stick di mozzarella impanati). Nelle note, suggerisci all'utente di verificare sull'etichetta.
-
-REGOLA FONDAMENTALE PER PASTA, RISO, CEREALI, LEGUMI:
-Questi alimenti hanno valori nutrizionali MOLTO diversi tra crudo e cotto. DEVI SEMPRE specificare lo stato nel campo "stato_cottura":
-- Pasta CRUDA: ~70-75g carbo/100g → Pasta COTTA: ~25-31g carbo/100g (dipende dal formato)
-- Riso CRUDO: ~78-80g carbo/100g → Riso COTTO: ~28-32g carbo/100g
-- Legumi SECCHI: ~45-60g carbo/100g → Legumi COTTI: ~15-22g carbo/100g
-- Couscous CRUDO: ~70g carbo/100g → Couscous COTTO: ~23g carbo/100g
-Se il paziente indica il peso CRUDO, i carbo_per_100g devono riferirsi al prodotto CRUDO. Se indica il peso COTTO (o dalla foto si vede nel piatto), usa i valori del COTTO.
-Nel campo "nome" specifica sempre "(cotto/a)" o "(crudo/a)" — es. "Spaghetti cotti", "Riso basmati crudo".
-
-VALORI DI RIFERIMENTO carbo_per_100g (USA QUESTI, NON INVENTARE):
-- Pasta di semola cotta: 30.3g | cruda: 72g
-- Pasta integrale cotta: 26.7g | cruda: 66g
-- Riso bianco cotto: 28.7g | crudo: 80g
-- Riso basmati cotto: 28g | crudo: 78g
-- Pane bianco: 49g | Pane integrale: 44g
-- Focaccia/pizza bianca: 52-54g
-- Patate bollite: 16g | Patate fritte: 29g
-- Banana (con buccia): 15.5g | (senza buccia): 20.1g
-- Mela: 11g | Arancia: 8g
-- Cornetto semplice: 48g | Cornetto farcito: 52-58g
-- Biscotti frollini: 68-72g
-- Latte intero: 4.7g | Yogurt bianco: 4.3g
-- Gelato: 24-33g (varia molto per tipo)
-Se conosci il valore specifico più preciso per l'alimento in foto, usalo. In caso di dubbio, preferisci la fonte CREA/INRAN.
-
-STIMA DELLE PORZIONI${body.imageBase64 ? ' (DALLA FOTO)' : ''}:
-${body.imageBase64 ? `Usa riferimenti di scala visibili nella foto:
-- Piatto piano standard: diametro 26-28 cm
-- Piatto fondo standard: diametro 20-22 cm  
-- Posate standard: forchetta ~20 cm, cucchiaio ~18 cm
-- MANO DEL PAZIENTE: ${body.handSize ? `larghezza palmo ${body.handSize} cm (misura calibrata dal paziente — è il RIFERIMENTO PIÙ AFFIDABILE se visibile)` : 'larghezza palmo ~8-9 cm (stima generica)'}. Se vedi una mano nella foto accanto al cibo, USALA COME RIFERIMENTO PRINCIPALE per stimare le dimensioni reali degli alimenti.
-- Bicchiere standard: 200-250 ml
-- Fetta di pane: 25-30g
-- Porzione tipica di pasta cotta nel piatto: 180-250g (= 70-100g di pasta cruda)
-Se non ci sono riferimenti di scala, usa porzioni standard italiane.` : 'Il paziente ha descritto il pasto a parole. Chiedi conferma del peso se ambiguo. Se indica solo il nome dell\'alimento senza peso, usa le porzioni standard italiane più comuni.'}
-
-FORMATO RISPOSTA — rispondi SOLO con JSON valido senza markdown:
-{"alimenti":[{"nome":"Spaghetti cotti","quantita_g":220,"carbo_per_100g":30.3,"carbo_g":66.7,"stato_cottura":"cotto","proteine_per_100g":5.3,"grassi_per_100g":0.4,"fibre_per_100g":1.2,"kcal_per_100g":137,"categoria":"salato","indice_glicemico":"lento"}],"totale_carbo_g":66.7,"totale_proteine_g":11.7,"totale_grassi_g":0.9,"totale_fibre_g":2.6,"totale_kcal":301,"note":"Valori riferiti alla pasta cotta. Peso crudo stimato: ~88g."}
-
-CAMPI PER OGNI ALIMENTO:
-- nome: nome preciso con stato (cotto/crudo) quando rilevante
-- quantita_g: peso stimato in grammi
-- carbo_per_100g: valore da tabelle nutrizionali (NON stimato)
-- carbo_g: carbo totali della porzione = (quantita_g × carbo_per_100g) / 100
-- stato_cottura: "cotto" | "crudo" | null (per alimenti dove non si applica)
-- proteine_per_100g, grassi_per_100g, fibre_per_100g, kcal_per_100g
-- categoria: "dolce" | "salato"
-- indice_glicemico: "lento" (pasta, legumi, riso basmati, verdure, cereali integrali) | "medio" (riso bianco, frutta matura, pane integrale, patate bollite) | "veloce" (focaccia, pizza, pane bianco, dolci, succhi, cornetti, crackers, patate fritte)`;
-
-      if (body.imageBase64) {
-        const { imageBase64, mediaType } = body;
-        messages = [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
-            { type: 'text', text: FOOD_ANALYSIS_PROMPT + correzioniDb }
-          ]
-        }];
-      } else {
-        // Modalità testo: il paziente descrive il pasto
-        const descrizione = body.textDescription;
-        messages = [{
-          role: 'user',
-          content: `${FOOD_ANALYSIS_PROMPT}${correzioniDb}
-
-DESCRIZIONE DEL PASTO DAL PAZIENTE:
-"${descrizione}"
-
-Analizza la descrizione, identifica ogni alimento e applica i valori nutrizionali da tabelle ufficiali. Se il paziente indica un peso, usalo. Se non indica il peso, usa porzioni standard italiane e segnalalo nelle note.`
-        }];
-      }
 
     // ── Modalità 2: calcolo rapporto insulina/carbo ──────────────────────────
     } else if (body.analysisType === 'insulin-ratio') {
@@ -335,23 +251,12 @@ Rispondi SOLO con JSON valido senza markdown, formato:
     }
 
     // ── Chiamata API Anthropic ───────────────────────────────────────────────
-    const isFoodAnalysis = (!!body.imageBase64 || !!body.textDescription) && body.analysisType !== 'read-label';
-    const isLabelReading = body.analysisType === 'read-label';
     const isPhotoAnalysis = !!body.imageBase64;
-    const isTextOnly = !!body.textDescription && !body.imageBase64;
-
-    // Foto cibo/etichetta → Sonnet (serve vision). Testo puro → Haiku (più veloce)
-    const model = (isPhotoAnalysis || isLabelReading) ? 'claude-sonnet-4-6' : 
-                  isTextOnly ? 'claude-haiku-4-5-20251001' :
-                  (body.analysisType === 'pattern-analysis' || body.analysisType === 'medico-chat') ? 'claude-haiku-4-5-20251001' : 'claude-haiku-4-5-20251001';
-
-    const payloadObj = {
-      model,
-      max_tokens: body.analysisType === 'pattern-analysis' ? 2000 : ((isFoodAnalysis || isLabelReading) ? 1500 : (body.analysisType === 'medico-chat' ? 1200 : 1000)),
+    const payload = JSON.stringify({
+      model: isPhotoAnalysis ? 'claude-sonnet-4-6' : 'claude-haiku-4-5-20251001',
+      max_tokens: body.analysisType === 'pattern-analysis' ? 2000 : (isPhotoAnalysis ? 1500 : (body.analysisType === 'medico-chat' ? 1200 : 1000)),
       messages
-    };
-
-    const payload = JSON.stringify(payloadObj);
+    });
 
     const result = await new Promise((resolve, reject) => {
       const options = {
@@ -384,37 +289,15 @@ Rispondi SOLO con JSON valido senza markdown, formato:
       return { statusCode: 500, headers, body: JSON.stringify({ error: anthropicResponse.error.message || 'Errore Anthropic' }) };
     }
 
-    // Estrai testo dalla risposta (può avere più blocchi con web_search)
-    const textBlocks = (anthropicResponse?.content || [])
-      .filter(b => b.type === 'text')
-      .map(b => b.text);
-    const text = textBlocks.join('\n');
+    const text = anthropicResponse?.content?.[0]?.text;
     if (!text) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Risposta vuota da Claude' }) };
 
-    // Estrai JSON dalla risposta — potrebbe essere avvolto in testo o markdown
-    let clean = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-    
-    // Se il testo contiene JSON mescolato a testo, prova ad estrarlo
-    let jsonResult;
-    try {
-      jsonResult = JSON.parse(clean);
-    } catch(e) {
-      // Cerca il primo { e l'ultimo } per estrarre il JSON
-      const firstBrace = clean.indexOf('{');
-      const lastBrace = clean.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace > firstBrace) {
-        const jsonCandidate = clean.substring(firstBrace, lastBrace + 1);
-        try {
-          jsonResult = JSON.parse(jsonCandidate);
-        } catch(e2) {
-          return { statusCode: 500, headers, body: JSON.stringify({ error: 'Claude non ha restituito JSON valido', raw: clean.slice(0, 300) }) };
-        }
-      } else {
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Claude non ha restituito JSON valido', raw: clean.slice(0, 300) }) };
-      }
-    }
+    const clean = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
 
-    return { statusCode: 200, headers, body: JSON.stringify(jsonResult) };
+    try { JSON.parse(clean); }
+    catch(e) { return { statusCode: 500, headers, body: JSON.stringify({ error: 'Claude non ha restituito JSON valido', raw: clean.slice(0, 200) }) }; }
+
+    return { statusCode: 200, headers, body: clean };
 
   } catch (err) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: err.message }) };

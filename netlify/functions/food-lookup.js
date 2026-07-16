@@ -145,6 +145,23 @@ exports.handler = async (event) => {
   if (nome) {
     const searchTerm = nome.trim().toLowerCase();
 
+    // Funzione per pulire il nome: rimuove parentesi, aggettivi di cottura, e parti superflue
+    function extractKeywords(name) {
+      let clean = name.toLowerCase();
+      // Rimuovi tutto tra parentesi
+      clean = clean.replace(/\([^)]*\)/g, '');
+      // Rimuovi aggettivi/specificazioni comuni dall'AI
+      clean = clean.replace(/\b(a julienne|a bastoncini|a fette|a cubetti|a pezzi|a rondelle|grattuggiato|tritato|affettato|tagliato|scottato|scottate|alla griglia|al forno|in padella|alla piastra|saltato|soffritto|fritto|lesso|lessato|condito|condita|surgelato|fresco|freschi|fresche|crudo|cruda|crudi|crude|cotto|cotta|cotti|cotte|bollito|bollita|bolliti|bollite|porzione|misto|mista|misti|miste)\b/g, '');
+      // Rimuovi articoli e preposizioni
+      clean = clean.replace(/\b(il|lo|la|le|gli|i|un|una|del|della|dello|dei|delle|degli|di|da|in|con|su|per|tra|fra|al|alla|allo|alle|agli|ai|e|o|ed)\b/g, '');
+      // Rimuovi spazi multipli e trim
+      clean = clean.replace(/\s+/g, ' ').trim();
+      return clean;
+    }
+
+    // Estrai parole chiave
+    const keywords = extractKeywords(searchTerm).split(' ').filter(w => w.length > 2);
+
     // Ricerca esatta
     const { data: exactMatch } = await supabase
       .from('alimenti')
@@ -154,7 +171,6 @@ exports.handler = async (event) => {
       .limit(1);
 
     if (exactMatch?.length > 0) {
-      // Aggiorna ultimo_uso
       await supabase.from('alimenti')
         .update({ ultimo_uso: new Date().toISOString() })
         .eq('id', exactMatch[0].id);
@@ -173,7 +189,7 @@ exports.handler = async (event) => {
       };
     }
 
-    // Ricerca fuzzy (contiene)
+    // Ricerca fuzzy (contiene il termine intero)
     const { data: fuzzyMatches } = await supabase
       .from('alimenti')
       .select('*')
@@ -183,9 +199,30 @@ exports.handler = async (event) => {
       .order('ultimo_uso', { ascending: false, nullsFirst: false })
       .limit(10);
 
-    if (fuzzyMatches?.length > 0) {
+    // Se fuzzy non trova nulla, cerca per parole chiave singole
+    let allMatches = fuzzyMatches || [];
+
+    if (allMatches.length === 0 && keywords.length > 0) {
+      // Cerca con la prima parola chiave (la più significativa, es. "carote", "pasta", "pizza")
+      for (const kw of keywords) {
+        const { data: kwMatches } = await supabase
+          .from('alimenti')
+          .select('*')
+          .eq('user_id', userId)
+          .ilike('nome', `%${kw}%`)
+          .order('verificato', { ascending: false })
+          .order('ultimo_uso', { ascending: false, nullsFirst: false })
+          .limit(10);
+        if (kwMatches?.length > 0) {
+          allMatches = kwMatches;
+          break; // prendi il primo match
+        }
+      }
+    }
+
+    if (allMatches.length > 0) {
       // Priorità: paziente corretto > CREA > AI
-      const sortedMatches = fuzzyMatches.sort((a, b) => {
+      const sortedMatches = allMatches.sort((a, b) => {
         const priority = (item) => {
           if (item.fonte === 'etichetta' || item.fonte === 'manuale' || item.fonte === 'openfoodfacts' || item.fonte === 'medico') return 0;
           if (item.fonte === 'crea') return 1;
@@ -208,7 +245,7 @@ exports.handler = async (event) => {
           verified: best.verificato || false,
           fonte_dettaglio: best.fonte_dettaglio,
           alimento: best,
-          alternatives: fuzzyMatches.slice(1).map(a => ({
+          alternatives: sortedMatches.slice(1).map(a => ({
             id: a.id,
             nome: a.nome,
             carbo_per_100g: a.carbo_per_100g,
