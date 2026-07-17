@@ -199,23 +199,31 @@ exports.handler = async (event) => {
       .order('ultimo_uso', { ascending: false, nullsFirst: false })
       .limit(10);
 
-    // Se fuzzy non trova nulla, cerca per parole chiave singole
+    // Se fuzzy non trova nulla O non trova CREA, cerca anche per parole chiave
     let allMatches = fuzzyMatches || [];
+    const hasCreaMatch = allMatches.some(m => m.fonte === 'crea' || m.fonte === 'etichetta' || m.fonte === 'manuale' || m.fonte === 'openfoodfacts');
 
-    if (allMatches.length === 0 && keywords.length > 0) {
-      // Cerca con la prima parola chiave (la più significativa, es. "carote", "pasta", "pizza")
+    if (keywords.length > 0 && !hasCreaMatch) {
+      // Cerca con ogni parola chiave e aggiungi i risultati
       for (const kw of keywords) {
         const { data: kwMatches } = await supabase
           .from('alimenti')
           .select('*')
           .eq('user_id', userId)
           .ilike('nome', `%${kw}%`)
-          .order('verificato', { ascending: false })
+          .eq('verificato', true) // solo verificati (CREA, etichetta, ecc)
           .order('ultimo_uso', { ascending: false, nullsFirst: false })
           .limit(10);
         if (kwMatches?.length > 0) {
-          allMatches = kwMatches;
-          break; // prendi il primo match
+          // Merge: aggiungi senza duplicati
+          const existingIds = new Set(allMatches.map(m => m.id));
+          for (const km of kwMatches) {
+            if (!existingIds.has(km.id)) {
+              allMatches.push(km);
+              existingIds.add(km.id);
+            }
+          }
+          break; // la prima keyword che trova match verificati basta
         }
       }
     }
