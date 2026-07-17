@@ -99,11 +99,20 @@ VALORI DI RIFERIMENTO carbo_per_100g (USA QUESTI, NON INVENTARE):
 Se conosci il valore specifico più preciso per l'alimento in foto, usalo. In caso di dubbio, preferisci la fonte CREA/INRAN.
 
 STIMA DELLE PORZIONI${body.imageBase64 ? ' (DALLA FOTO)' : ''}:
-${body.imageBase64 ? `Usa riferimenti di scala visibili nella foto:
+${body.imageBase64 ? `IMPORTANTE — STIMA DEL PESO:
+Se nella foto è visibile una MANO accanto al cibo:
+${body.handSize ? `- La larghezza del palmo del paziente è ESATTAMENTE ${body.handSize} cm (misurata con righello).` : '- Larghezza palmo stimata: ~8-9 cm.'}
+- PROCEDURA OBBLIGATORIA: 
+  1. Misura visivamente quante volte il palmo (${body.handSize || '8.5'} cm) entra nella lunghezza/larghezza dell'alimento
+  2. Calcola le dimensioni reali dell'alimento in cm
+  3. Stima il volume e converti in grammi usando la densità tipica dell'alimento
+  4. ESEMPIO: se un panino è largo quanto 1.5 palmi = ${Math.round((body.handSize || 8.5) * 1.5)} cm, e alto circa mezzo palmo = ${Math.round((body.handSize || 8.5) * 0.5)} cm → volume ~300 cm³ → pane ha densità ~0.3 g/cm³ → peso ~90g
+  5. ATTENZIONE: tendi a SOVRASTIMARE il peso. Se sei incerto, scegli il valore PIÙ BASSO della tua stima.
+
+Se NON c'è una mano nella foto, usa questi riferimenti:
 - Piatto piano standard: diametro 26-28 cm
 - Piatto fondo standard: diametro 20-22 cm  
 - Posate standard: forchetta ~20 cm, cucchiaio ~18 cm
-- MANO DEL PAZIENTE: ${body.handSize ? `larghezza palmo ${body.handSize} cm (misura calibrata dal paziente — è il RIFERIMENTO PIÙ AFFIDABILE se visibile)` : 'larghezza palmo ~8-9 cm (stima generica)'}. Se vedi una mano nella foto accanto al cibo, USALA COME RIFERIMENTO PRINCIPALE per stimare le dimensioni reali degli alimenti.
 - Bicchiere standard: 200-250 ml
 - Fetta di pane: 25-30g
 - Porzione tipica di pasta cotta nel piatto: 180-250g (= 70-100g di pasta cruda)
@@ -115,6 +124,7 @@ FORMATO RISPOSTA — rispondi SOLO con JSON valido senza markdown:
 CAMPI PER OGNI ALIMENTO:
 - nome: nome preciso con stato (cotto/crudo) quando rilevante
 - quantita_g: peso stimato in grammi
+- stima_peso_note: breve spiegazione di come hai stimato il peso (es. "circa 1.2 palmi di lunghezza = 10cm, altezza 4cm, densità pane ~0.3 → ~50g" oppure "porzione standard italiana")
 - carbo_per_100g: valore da tabelle nutrizionali (NON stimato)
 - carbo_g: carbo totali della porzione = (quantita_g × carbo_per_100g) / 100
 - stato_cottura: "cotto" | "crudo" | null (per alimenti dove non si applica)
