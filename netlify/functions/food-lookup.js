@@ -229,14 +229,22 @@ exports.handler = async (event) => {
     }
 
     if (allMatches.length > 0) {
-      // Priorità: paziente corretto > CREA > AI
+      // Priorità: fonte (paziente > CREA > AI) + rilevanza keywords
       const sortedMatches = allMatches.sort((a, b) => {
-        const priority = (item) => {
+        const sourcePriority = (item) => {
           if (item.fonte === 'etichetta' || item.fonte === 'manuale' || item.fonte === 'openfoodfacts' || item.fonte === 'medico') return 0;
           if (item.fonte === 'crea') return 1;
           return 2; // ai o null
         };
-        return priority(a) - priority(b);
+        // Conta quante keywords matchano nel nome
+        const keywordScore = (item) => {
+          const nome = item.nome.toLowerCase();
+          return keywords.filter(kw => nome.includes(kw)).length;
+        };
+        const srcDiff = sourcePriority(a) - sourcePriority(b);
+        if (srcDiff !== 0) return srcDiff;
+        // A parità di fonte, più keywords matchano = meglio
+        return keywordScore(b) - keywordScore(a);
       });
       const best = sortedMatches[0];
 
