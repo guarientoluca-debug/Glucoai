@@ -25,11 +25,10 @@ exports.handler = async (event) => {
   if (action === 'list') {
     const { data, error } = await supabase
       .from('alimenti')
-      .select('id, nome, carbo_per_100g, proteine_per_100g, grassi_per_100g, fibre_per_100g, kcal_per_100g, fonte, verificato, fonte_dettaglio, barcode, ultimo_uso')
+      .select('id, nome, carbo_per_100g, proteine_per_100g, grassi_per_100g, fibre_per_100g, kcal_per_100g, fonte, verificato, fonte_dettaglio, barcode, ultimo_uso, categoria')
       .eq('user_id', userId)
-      .neq('fonte', 'crea')
       .order('ultimo_uso', { ascending: false, nullsFirst: false })
-      .limit(100);
+      .limit(500);
 
     return {
       statusCode: 200, headers,
