@@ -136,7 +136,7 @@ FORMATO RISPOSTA — rispondi SOLO con JSON valido senza markdown:
 
 CAMPI PER OGNI ALIMENTO:
 - nome: nome preciso con stato (cotto/crudo) quando rilevante
-- nome_marca: se riconosci un PRODOTTO DI MARCA specifico (es. dalla confezione visibile, dal logo, dal packaging), scrivi il nome commerciale esatto (es. "Voiello", "Barilla", "Mulino Bianco", "Bowl Pros"). Se è un alimento generico senza marca identificabile (es. pasta sfusa, frutta, verdura, piatto cucinato), metti null. Questo campo determina se il dato è persistibile per il futuro.
+- nome_marca: compila questo campo SOLO SE nella foto è FISICAMENTE VISIBILE una confezione, un logo, o un'etichetta con il nome commerciale leggibile. Scrivi il nome commerciale esatto (es. "Voiello", "Barilla", "Bowl Pros"). REGOLA CRITICA: se vedi solo il CIBO (es. cereali in una ciotola, pasta in un piatto, senza confezione visibile), metti SEMPRE null — anche se pensi di riconoscere il tipo di prodotto. NON dedurre la marca dall'aspetto del cibo: solo dalla confezione/logo effettivamente visibile nella foto. Nel dubbio, metti null. Questo campo determina se il dato è persistibile per il futuro.
 - quantita_g: peso stimato in grammi
 - stima_peso_note: breve spiegazione di come hai stimato il peso (es. "circa 1.2 palmi di lunghezza = 10cm, altezza 4cm, densità pane ~0.3 → ~50g" oppure "porzione standard italiana")
 - carbo_per_100g: valore da tabelle nutrizionali (NON stimato)
