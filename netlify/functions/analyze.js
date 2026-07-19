@@ -34,10 +34,22 @@ exports.handler = async function(event, context) {
           { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
           { type: 'text', text: `Leggi la tabella nutrizionale in questa foto di un prodotto alimentare confezionato.
 
+STEP 1 — IDENTIFICA IL PRODOTTO:
+Prima di leggere i valori, cerca se nell'immagine è visibile un NOME DI MARCA/PRODOTTO SPECIFICO (es. "Barilla Penne Rigate", "Mulino Bianco Flauti", "Bowl Pros Granola Cioccolato & Lamponi").
+- Se trovi un nome di marca/prodotto chiaro e leggibile: nome_prodotto_specifico = true, e scrivi il nome esatto in "nome_prodotto"
+- Se NON trovi un nome di marca (solo tabella nutrizionale senza confezione visibile, oppure nome illeggibile/tagliato): nome_prodotto_specifico = false, e "nome_prodotto" = null
+Questo campo è CRITICO: determina se il dato può essere riutilizzato in futuro o va riverificato ogni volta.
+
+STEP 2 — ESTRAI I VALORI:
 Estrai i valori PER 100g dalla tabella. Se ci sono solo valori "per porzione", converti a per 100g usando il peso della porzione indicato.
 
+STEP 3 — VERIFICA COERENZA:
+Prima di restituire i valori, verifica che siano internamente coerenti:
+kcal_per_100g deve essere approssimativamente uguale a (carbo_per_100g × 4) + (proteine_per_100g × 4) + (grassi_per_100g × 9), con tolleranza ±15%.
+Se i valori NON superano questo controllo, probabilmente hai letto un numero sbagliato — ricontrolla l'immagine. Se non riesci a leggerli con certezza, imposta "valori_incerti": true.
+
 Rispondi SOLO con JSON valido senza markdown:
-{"nome_prodotto":"nome del prodotto se visibile","carbo_per_100g":15.7,"di_cui_zuccheri_per_100g":1.8,"proteine_per_100g":10,"grassi_per_100g":12.9,"fibre_per_100g":0.89,"kcal_per_100g":303,"sale_per_100g":0.89,"porzione_g":125,"note":"eventuali note"}
+{"nome_prodotto":"nome esatto del prodotto o null","nome_prodotto_specifico":true,"carbo_per_100g":15.7,"di_cui_zuccheri_per_100g":1.8,"proteine_per_100g":10,"grassi_per_100g":12.9,"fibre_per_100g":0.89,"kcal_per_100g":303,"sale_per_100g":0.89,"porzione_g":125,"valori_incerti":false,"note":"eventuali note"}
 
 Se non riesci a leggere chiaramente un valore, metti null. Il campo più importante è carbo_per_100g — assicurati che sia corretto.` }
         ]
@@ -422,6 +434,46 @@ Rispondi SOLO con JSON valido senza markdown, formato:
       } else {
         return { statusCode: 500, headers, body: JSON.stringify({ error: 'Claude non ha restituito JSON valido', raw: clean.slice(0, 300) }) };
       }
+    }
+
+    // ── Validazione post-processing per lettura etichetta ──────────────────
+    if (isLabelReading && jsonResult) {
+      // Controllo coerenza energetica server-side (backup al prompt)
+      const c = jsonResult.carbo_per_100g;
+      const p = jsonResult.proteine_per_100g;
+      const g = jsonResult.grassi_per_100g;
+      const k = jsonResult.kcal_per_100g;
+      if (c != null && p != null && g != null && k != null) {
+        const kcalCalcolate = (c * 4) + (p * 4) + (g * 9);
+        const scarto = Math.abs(kcalCalcolate - k) / Math.max(k, 1);
+        if (scarto > 0.20) {
+          jsonResult.valori_incerti = true;
+          jsonResult.warning_coerenza = `Valori potenzialmente errati: kcal dichiarate ${k}, kcal calcolate dai macro ${Math.round(kcalCalcolate)} (scarto ${Math.round(scarto * 100)}%). Verifica manualmente.`;
+        }
+      }
+
+      // Assegna fonte in base a nome_prodotto_specifico
+      if (jsonResult.nome_prodotto_specifico === true && jsonResult.nome_prodotto) {
+        jsonResult.fonte_suggerita = 'foto_etichetta';
+        jsonResult.badge = '✓ Foto etichetta';
+        jsonResult.persistibile = true; // OK salvare per riuso futuro
+      } else {
+        jsonResult.fonte_suggerita = 'stima_ai';
+        jsonResult.badge = '⚡ Stima AI — verifica i valori';
+        jsonResult.persistibile = false; // NON salvare come dato affidabile
+      }
+    }
+
+    // ── Fonte per analisi foto cibo (non etichetta) ─────────────────────────
+    if (isFoodAnalysis && jsonResult && jsonResult.alimenti) {
+      jsonResult.alimenti = jsonResult.alimenti.map(al => {
+        // Se l'AI ha restituito un nome generico (senza marca), è stima AI
+        if (!al.fonte) {
+          al.fonte = 'stima_ai';
+          al.badge = '⚡ Stima AI — verifica i valori';
+        }
+        return al;
+      });
     }
 
     return { statusCode: 200, headers, body: JSON.stringify(jsonResult) };
