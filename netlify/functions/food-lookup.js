@@ -232,9 +232,13 @@ exports.handler = async (event) => {
       // Priorità: rilevanza keywords PRIMA, poi fonte
       const sortedMatches = allMatches.sort((a, b) => {
         const sourcePriority = (item) => {
-          if (item.fonte === 'etichetta' || item.fonte === 'manuale' || item.fonte === 'openfoodfacts' || item.fonte === 'medico') return 0;
+          // Confezionato con nome reale è più affidabile di generico
+          if (item.nome_tipo === 'confezionato') {
+            if (item.fonte === 'etichetta' || item.fonte === 'manuale' || item.fonte === 'openfoodfacts' || item.fonte === 'medico') return 0;
+          }
           if (item.fonte === 'crea') return 1;
-          return 2; // ai o null
+          if (item.fonte === 'openfoodfacts') return 1;
+          return 2; // ai, generico, o null
         };
         // Conta quante keywords matchano nel nome
         const keywordScore = (item) => {
@@ -248,10 +252,10 @@ exports.handler = async (event) => {
         return sourcePriority(a) - sourcePriority(b);
       });
 
-      // Filtra: il best match deve avere almeno 2 keywords in comune (o match esatto fuzzy)
-      // per evitare false match tipo "frutta" → "Zuegg succo di frutta"
+      // Filtra: il best match deve avere almeno il 50% delle keywords in comune
+      // per evitare false match tipo "fiocchi" → prodotto diverso con "fiocchi" nel nome
       const keywordScoreBest = keywords.filter(kw => sortedMatches[0].nome.toLowerCase().includes(kw)).length;
-      const minKeywords = Math.min(2, keywords.length); // se la query ha solo 1 keyword, accetta 1
+      const minKeywords = Math.max(2, Math.ceil(keywords.length * 0.5)); // almeno 50% delle keywords, minimo 2
       
       if (keywordScoreBest < minKeywords && !sortedMatches[0].nome.toLowerCase().includes(searchTerm)) {
         // Match troppo debole — non restituire come trovato
@@ -269,6 +273,10 @@ exports.handler = async (event) => {
       }
 
       const best = sortedMatches[0];
+      
+      // Se il match è generico (senza nome prodotto reale), non restituirlo come verificato
+      // anche se nel DB è marcato come tale (potrebbe essere un prodotto diverso)
+      const isReallyVerified = best.nome_tipo === 'confezionato' ? (best.verificato || false) : false;
 
       await supabase.from('alimenti')
         .update({ ultimo_uso: new Date().toISOString() })
@@ -280,8 +288,9 @@ exports.handler = async (event) => {
         body: JSON.stringify({
           found: true,
           source: best.fonte || 'db_locale',
-          verified: best.verificato || false,
-          fonte_dettaglio: best.fonte_dettaglio,
+          verified: isReallyVerified,
+          fonte_dettaglio: isReallyVerified ? best.fonte_dettaglio : (best.fonte === 'crea' ? best.fonte_dettaglio : 'Stima AI — verifica i valori'),
+          nome_tipo: best.nome_tipo || 'generico',
           alimento: best,
           alternatives: sortedMatches.slice(1).map(a => ({
             id: a.id,
