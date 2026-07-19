@@ -389,7 +389,7 @@ Rispondi SOLO con JSON valido senza markdown, formato:
 
     const payloadObj = {
       model,
-      max_tokens: body.analysisType === 'pattern-analysis' ? 2000 : ((isFoodAnalysis || isLabelReading) ? 1500 : (body.analysisType === 'medico-chat' ? 1200 : 1000)),
+      max_tokens: body.analysisType === 'pattern-analysis' ? 2000 : ((isFoodAnalysis || isLabelReading) ? 4000 : (body.analysisType === 'medico-chat' ? 1200 : 1000)),
       messages
     };
 
