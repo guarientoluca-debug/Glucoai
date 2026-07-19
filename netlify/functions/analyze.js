@@ -66,8 +66,9 @@ Se non riesci a leggere chiaramente un valore, metti null. Il campo più importa
           const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
           const { data: corrections } = await supabase
             .from('food_corrections')
-            .select('nome_normalizzato, carbo_per_100g, proteine_per_100g, grassi_per_100g, kcal_per_100g, conferme')
+            .select('nome_normalizzato, carbo_per_100g, proteine_per_100g, grassi_per_100g, kcal_per_100g, conferme, nome_tipo')
             .gte('conferme', 2)
+            .eq('nome_tipo', 'confezionato')
             .order('conferme', { ascending: false })
             .limit(50);
           if (corrections?.length > 0) {
