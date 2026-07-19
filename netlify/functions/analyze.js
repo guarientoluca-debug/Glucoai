@@ -4,6 +4,24 @@ const { createClient } = require('@supabase/supabase-js');
 const SUPABASE_URL = 'https://zynytvhmlnvlvswuhtse.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// Estrazione JSON robusta: gestisce markdown, testo attorno al JSON,
+// virgole finali e caratteri di controllo letterali (newline/tab) che
+// dentro una stringa JSON sono SEMPRE invalidi — rimuoverli non corrompe JSON valido.
+function extractJson(text) {
+  if (!text) return null;
+  let s = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+  const first = s.indexOf('{');
+  const last = s.lastIndexOf('}');
+  if (first === -1 || last <= first) return null;
+  const candidate = s.substring(first, last + 1);
+  try { return JSON.parse(candidate); } catch (_) {}
+  const repaired = candidate
+    .replace(/,\s*([}\]])/g, '$1')
+    .replace(/[\u0000-\u001F]/g, ' ');
+  try { return JSON.parse(repaired); } catch (_) {}
+  return null;
+}
+
 exports.handler = async function(event, context) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -415,27 +433,10 @@ Rispondi SOLO con JSON valido senza markdown, formato:
     const text = textBlocks.join('\n');
     if (!text) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Risposta vuota da Claude' }) };
 
-    // Estrai JSON dalla risposta — potrebbe essere avvolto in testo o markdown
-    let clean = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-    
-    // Se il testo contiene JSON mescolato a testo, prova ad estrarlo
-    let jsonResult;
-    try {
-      jsonResult = JSON.parse(clean);
-    } catch(e) {
-      // Cerca il primo { e l'ultimo } per estrarre il JSON
-      const firstBrace = clean.indexOf('{');
-      const lastBrace = clean.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace > firstBrace) {
-        const jsonCandidate = clean.substring(firstBrace, lastBrace + 1);
-        try {
-          jsonResult = JSON.parse(jsonCandidate);
-        } catch(e2) {
-          return { statusCode: 500, headers, body: JSON.stringify({ error: 'Claude non ha restituito JSON valido', raw: clean.slice(0, 300) }) };
-        }
-      } else {
-        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Claude non ha restituito JSON valido', raw: clean.slice(0, 300) }) };
-      }
+    // Estrai JSON dalla risposta — robusto a markdown, testo attorno, char di controllo
+    const jsonResult = extractJson(text);
+    if (!jsonResult) {
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Claude non ha restituito JSON valido', raw: text.slice(0, 400) }) };
     }
 
     // ── Validazione post-processing per lettura etichetta ──────────────────
