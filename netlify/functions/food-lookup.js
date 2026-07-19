@@ -229,7 +229,7 @@ exports.handler = async (event) => {
     }
 
     if (allMatches.length > 0) {
-      // Priorità: fonte (paziente > CREA > AI) + rilevanza keywords
+      // Priorità: rilevanza keywords PRIMA, poi fonte
       const sortedMatches = allMatches.sort((a, b) => {
         const sourcePriority = (item) => {
           if (item.fonte === 'etichetta' || item.fonte === 'manuale' || item.fonte === 'openfoodfacts' || item.fonte === 'medico') return 0;
@@ -241,11 +241,33 @@ exports.handler = async (event) => {
           const nome = item.nome.toLowerCase();
           return keywords.filter(kw => nome.includes(kw)).length;
         };
-        const srcDiff = sourcePriority(a) - sourcePriority(b);
-        if (srcDiff !== 0) return srcDiff;
-        // A parità di fonte, più keywords matchano = meglio
-        return keywordScore(b) - keywordScore(a);
+        // Keyword score è più importante della fonte: un match con più parole è più rilevante
+        const kwDiff = keywordScore(b) - keywordScore(a);
+        if (kwDiff !== 0) return kwDiff;
+        // A parità di keywords, fonte migliore vince
+        return sourcePriority(a) - sourcePriority(b);
       });
+
+      // Filtra: il best match deve avere almeno 2 keywords in comune (o match esatto fuzzy)
+      // per evitare false match tipo "frutta" → "Zuegg succo di frutta"
+      const keywordScoreBest = keywords.filter(kw => sortedMatches[0].nome.toLowerCase().includes(kw)).length;
+      const minKeywords = Math.min(2, keywords.length); // se la query ha solo 1 keyword, accetta 1
+      
+      if (keywordScoreBest < minKeywords && !sortedMatches[0].nome.toLowerCase().includes(searchTerm)) {
+        // Match troppo debole — non restituire come trovato
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({
+            found: false,
+            source: null,
+            message: 'Nessun match sufficientemente affidabile. Usa la stima AI.',
+            search_term: searchTerm,
+            candidates: sortedMatches.slice(0, 3).map(a => ({ nome: a.nome, carbo_per_100g: a.carbo_per_100g, fonte: a.fonte })),
+          }),
+        };
+      }
+
       const best = sortedMatches[0];
 
       await supabase.from('alimenti')
