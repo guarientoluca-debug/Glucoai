@@ -132,10 +132,11 @@ Se NON c'è una mano nella foto, usa questi riferimenti:
 Se non ci sono riferimenti di scala, usa porzioni standard italiane.` : 'Il paziente ha descritto il pasto a parole. Chiedi conferma del peso se ambiguo. Se indica solo il nome dell\'alimento senza peso, usa le porzioni standard italiane più comuni.'}
 
 FORMATO RISPOSTA — rispondi SOLO con JSON valido senza markdown:
-{"alimenti":[{"nome":"Spaghetti cotti","quantita_g":220,"carbo_per_100g":30.3,"carbo_g":66.7,"stato_cottura":"cotto","proteine_per_100g":5.3,"grassi_per_100g":0.4,"fibre_per_100g":1.2,"kcal_per_100g":137,"categoria":"salato","indice_glicemico":"lento"}],"totale_carbo_g":66.7,"totale_proteine_g":11.7,"totale_grassi_g":0.9,"totale_fibre_g":2.6,"totale_kcal":301,"note":"Valori riferiti alla pasta cotta. Peso crudo stimato: ~88g."}
+{"alimenti":[{"nome":"Spaghetti cotti","nome_marca":null,"quantita_g":220,"carbo_per_100g":30.3,"carbo_g":66.7,"stato_cottura":"cotto","proteine_per_100g":5.3,"grassi_per_100g":0.4,"fibre_per_100g":1.2,"kcal_per_100g":137,"categoria":"salato","indice_glicemico":"lento"}],"totale_carbo_g":66.7,"totale_proteine_g":11.7,"totale_grassi_g":0.9,"totale_fibre_g":2.6,"totale_kcal":301,"note":"Valori riferiti alla pasta cotta. Peso crudo stimato: ~88g."}
 
 CAMPI PER OGNI ALIMENTO:
 - nome: nome preciso con stato (cotto/crudo) quando rilevante
+- nome_marca: se riconosci un PRODOTTO DI MARCA specifico (es. dalla confezione visibile, dal logo, dal packaging), scrivi il nome commerciale esatto (es. "Voiello", "Barilla", "Mulino Bianco", "Bowl Pros"). Se è un alimento generico senza marca identificabile (es. pasta sfusa, frutta, verdura, piatto cucinato), metti null. Questo campo determina se il dato è persistibile per il futuro.
 - quantita_g: peso stimato in grammi
 - stima_peso_note: breve spiegazione di come hai stimato il peso (es. "circa 1.2 palmi di lunghezza = 10cm, altezza 4cm, densità pane ~0.3 → ~50g" oppure "porzione standard italiana")
 - carbo_per_100g: valore da tabelle nutrizionali (NON stimato)
@@ -468,6 +469,8 @@ Rispondi SOLO con JSON valido senza markdown, formato:
     // ── Fonte per analisi foto cibo (non etichetta) ─────────────────────────
     if (isFoodAnalysis && jsonResult && jsonResult.alimenti) {
       jsonResult.alimenti = jsonResult.alimenti.map(al => {
+        // Assegna nome_tipo in base a nome_marca
+        al.nome_tipo = al.nome_marca ? 'confezionato' : 'generico';
         // Se l'AI ha restituito un nome generico (senza marca), è stima AI
         if (!al.fonte) {
           al.fonte = 'stima_ai';
