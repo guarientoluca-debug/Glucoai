@@ -25,6 +25,9 @@ exports.handler = async function(event, context) {
 
     let messages;
 
+    // Modalità "misura precisa": 2 foto (dall'alto + di lato) con moneta, invece di 1 foto in prospettiva
+    const isDualPhoto = !!(body.imageBase64Top && body.imageBase64Side);
+
     // ── Modalità 7: lettura etichetta nutrizionale (DEVE stare PRIMA del check imageBase64) ──
     if (body.analysisType === 'read-label' && body.imageBase64) {
       const { imageBase64, mediaType } = body;
@@ -57,7 +60,7 @@ Se non riesci a leggere chiaramente un valore, metti null. Il campo più importa
 
     // ── Modalità 1a: analisi foto pasto ──────────────────────────────────────
     // ── Modalità 1b: descrizione testuale pasto (senza foto) ─────────────────
-    } else if (body.imageBase64 || body.textDescription) {
+    } else if (body.imageBase64 || body.textDescription || isDualPhoto) {
 
       // Cerca correzioni nutrizionali nel DB condiviso
       let correzioniDb = '';
@@ -111,8 +114,19 @@ VALORI DI RIFERIMENTO carbo_per_100g (USA QUESTI, NON INVENTARE):
 - Gelato: 24-33g (varia molto per tipo)
 Se conosci il valore specifico più preciso per l'alimento in foto, usalo. In caso di dubbio, preferisci la fonte CREA/INRAN.
 
-STIMA DELLE PORZIONI${body.imageBase64 ? ' (DALLA FOTO)' : ''}:
-${body.imageBase64 ? `IMPORTANTE — STIMA DEL PESO:
+STIMA DELLE PORZIONI${(body.imageBase64 || isDualPhoto) ? ' (DALLA FOTO)' : ''}:
+${isDualPhoto ? `IMPORTANTE — STIMA DEL PESO CON 2 FOTO (MISURA PRECISA):
+Hai ricevuto 2 immagini dello STESSO alimento, con la stessa MONETA DA 1 EURO (diametro reale 23.25mm) come riferimento di scala:
+- IMMAGINE 1 = vista DALL'ALTO → usala per misurare LUNGHEZZA e LARGHEZZA dell'alimento, confrontandole con il diametro della moneta visibile in questa stessa immagine
+- IMMAGINE 2 = vista LATERALE → usala per misurare l'ALTEZZA dell'alimento (dal piano d'appoggio alla sommità), confrontandola con il diametro della moneta visibile in questa stessa immagine
+- PROCEDURA OBBLIGATORIA:
+  1. Nell'immagine 1: misura quante "unità moneta" (23.25mm ciascuna) occupano lunghezza e larghezza dell'alimento
+  2. Nell'immagine 2: misura quante "unità moneta" occupa l'altezza dell'alimento
+  3. Converti ciascuna dimensione in cm reali: dimensione_cm = (unità moneta) × 2.325
+  4. Calcola il volume con la formula del SEMI-ellissoide (l'alimento poggia su un piano): V = (2π/3) × (lunghezza/2) × (larghezza/2) × altezza. Converti in peso con la densità tipica dell'alimento.
+  5. CALIBRAZIONE PANE (verificata con bilancia su test reali): per prodotti da forno a forma di panino/rosetta/michetta/filoncino/baguette, applica un fattore correttivo × 0.7 al peso calcolato, PRIMA di qualunque arrotondamento finale. Non applicare questo fattore ad altri alimenti finché non calibrato.
+  6. Misurare lunghezza/larghezza e altezza da 2 immagini separate (invece che indovinarle tutte da una singola foto in prospettiva) riduce l'errore di stima — imposta "metodo_stima": "moneta_doppia_foto" nella risposta (fiducia massima sul peso)
+` : body.imageBase64 ? `IMPORTANTE — STIMA DEL PESO:
 
 PRIORITÀ 1 — MONETA DA 1 EURO COME RIFERIMENTO DI SCALA:
 Se nella foto è visibile una MONETA DA 1 EURO accanto al cibo (bordo bicolore dorato/argento, diametro esatto 23.25mm), è il riferimento più preciso possibile — usala con priorità su qualsiasi altro metodo.
@@ -123,7 +137,7 @@ Se nella foto è visibile una MONETA DA 1 EURO accanto al cibo (bordo bicolore d
   4. Calcola il volume usando la formula del SEMI-ellissoide, perché l'alimento poggia su un piano (non è sospeso a mezz'aria): V = (2π/3) × (lunghezza/2) × (larghezza/2) × altezza_reale, dove altezza_reale è l'altezza misurata dal piano alla sommità (NON dimezzarla). Converti in peso usando la densità tipica dell'alimento.
   5. CALIBRAZIONE PANE (verificata con bilancia su test reali): per prodotti da forno a forma di panino/rosetta/michetta/filoncino/baguette, anche con la formula corretta la stima tende a restare più alta del peso reale di circa il 30%. Applica quindi un fattore correttivo × 0.7 al peso calcolato per questi alimenti, PRIMA di qualunque arrotondamento finale. Non applicare questo fattore ad altri alimenti (frutta, formaggi, carne, ecc.) finché non calibrato.
   6. Questo metodo è più affidabile della stima a mano/piatto: se la moneta è visibile, imposta "metodo_stima": "moneta_riferimento" nella risposta (fiducia alta sul peso)
-- Usa questo metodo soprattutto per pasti fuori casa (ristorante, bar) dove non è disponibile una bilancia.
+- Usa questo metodo soprattutto per pasti fuori casa (ristorante, bar) dove non è disponibile una bilancia. Se è disponibile la modalità "2 foto" (dall'alto + di lato), suggeriscila nelle note per una stima più precisa.
 
 PRIORITÀ 2 — MANO COME RIFERIMENTO (se non c'è moneta):
 Se nella foto è visibile una MANO accanto al cibo:
@@ -152,7 +166,7 @@ FORMATO RISPOSTA — rispondi SOLO con JSON valido senza markdown:
 CAMPI PER OGNI ALIMENTO:
 - nome: nome preciso con stato (cotto/crudo) quando rilevante
 - nome_marca: compila questo campo SOLO SE nella foto è FISICAMENTE VISIBILE una confezione, un logo, o un'etichetta con il nome commerciale leggibile. Scrivi il nome commerciale esatto (es. "Voiello", "Barilla", "Bowl Pros"). REGOLA CRITICA: se vedi solo il CIBO (es. cereali in una ciotola, pasta in un piatto, senza confezione visibile), metti SEMPRE null — anche se pensi di riconoscere il tipo di prodotto. NON dedurre la marca dall'aspetto del cibo: solo dalla confezione/logo effettivamente visibile nella foto. Nel dubbio, metti null. Questo campo determina se il dato è persistibile per il futuro.
-- metodo_stima: "moneta_riferimento" | "mano_riferimento" | "stima_visiva" — indica quale metodo hai usato per stimare il peso, in base a cosa era visibile nella foto
+- metodo_stima: "moneta_doppia_foto" | "moneta_riferimento" | "mano_riferimento" | "stima_visiva" — indica quale metodo hai usato per stimare il peso, in base a cosa era visibile nella foto
 - quantita_g: peso stimato in grammi
 - stima_peso_note: breve spiegazione di come hai stimato il peso, includendo eventuale fattore di calibrazione applicato (es. "moneta 1€ visibile: alimento 10.5×8.1×4.5cm, semi-ellissoide → 88g, calibrazione pane ×0.7 → ~62g" oppure "circa 1.2 palmi di lunghezza = 10cm, altezza 4cm, densità pane ~0.3 → ~50g" oppure "porzione standard italiana")
 - carbo_per_100g: valore da tabelle nutrizionali (NON stimato)
@@ -162,7 +176,19 @@ CAMPI PER OGNI ALIMENTO:
 - categoria: "dolce" | "salato"
 - indice_glicemico: "lento" (pasta, legumi, riso basmati, verdure, cereali integrali) | "medio" (riso bianco, frutta matura, pane integrale, patate bollite) | "veloce" (focaccia, pizza, pane bianco, dolci, succhi, cornetti, crackers, patate fritte)`;
 
-      if (body.imageBase64) {
+      if (isDualPhoto) {
+        const { imageBase64Top, imageBase64Side, mediaTypeTop, mediaTypeSide } = body;
+        messages = [{
+          role: 'user',
+          content: [
+            { type: 'text', text: '⬆️ IMMAGINE 1 — VISTA DALL\'ALTO (usa per lunghezza e larghezza):' },
+            { type: 'image', source: { type: 'base64', media_type: mediaTypeTop || 'image/jpeg', data: imageBase64Top } },
+            { type: 'text', text: '➡️ IMMAGINE 2 — VISTA LATERALE (usa per l\'altezza):' },
+            { type: 'image', source: { type: 'base64', media_type: mediaTypeSide || 'image/jpeg', data: imageBase64Side } },
+            { type: 'text', text: FOOD_ANALYSIS_PROMPT + correzioniDb }
+          ]
+        }];
+      } else if (body.imageBase64) {
         const { imageBase64, mediaType } = body;
         messages = [{
           role: 'user',
@@ -375,10 +401,10 @@ Rispondi SOLO con JSON valido senza markdown, formato:
     }
 
     // ── Chiamata API Anthropic ───────────────────────────────────────────────
-    const isFoodAnalysis = (!!body.imageBase64 || !!body.textDescription) && body.analysisType !== 'read-label';
+    const isFoodAnalysis = (!!body.imageBase64 || !!body.textDescription || isDualPhoto) && body.analysisType !== 'read-label';
     const isLabelReading = body.analysisType === 'read-label';
-    const isPhotoAnalysis = !!body.imageBase64;
-    const isTextOnly = !!body.textDescription && !body.imageBase64;
+    const isPhotoAnalysis = !!body.imageBase64 || isDualPhoto;
+    const isTextOnly = !!body.textDescription && !body.imageBase64 && !isDualPhoto;
 
     // Foto cibo/etichetta → Sonnet (serve vision). Testo puro → Haiku (più veloce)
     const model = (isPhotoAnalysis || isLabelReading) ? 'claude-sonnet-4-6' : 
@@ -503,7 +529,10 @@ Rispondi SOLO con JSON valido senza markdown, formato:
           al.badge = '⚡ Stima AI — verifica i valori';
         }
         // Badge di fiducia sul PESO stimato, in base al metodo usato
-        if (al.metodo_stima === 'moneta_riferimento') {
+        if (al.metodo_stima === 'moneta_doppia_foto') {
+          al.peso_badge = '📐🪙 Peso misurato con moneta (2 foto)';
+          al.peso_confidenza = 'alta';
+        } else if (al.metodo_stima === 'moneta_riferimento') {
           al.peso_badge = '🪙 Peso stimato con moneta 1€';
           al.peso_confidenza = 'alta';
         } else if (al.metodo_stima === 'mano_riferimento') {
