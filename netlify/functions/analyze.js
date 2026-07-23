@@ -4,24 +4,6 @@ const { createClient } = require('@supabase/supabase-js');
 const SUPABASE_URL = 'https://zynytvhmlnvlvswuhtse.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// Estrazione JSON robusta: gestisce markdown, testo attorno al JSON,
-// virgole finali e caratteri di controllo letterali (newline/tab) che
-// dentro una stringa JSON sono SEMPRE invalidi — rimuoverli non corrompe JSON valido.
-function extractJson(text) {
-  if (!text) return null;
-  let s = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-  const first = s.indexOf('{');
-  const last = s.lastIndexOf('}');
-  if (first === -1 || last <= first) return null;
-  const candidate = s.substring(first, last + 1);
-  try { return JSON.parse(candidate); } catch (_) {}
-  const repaired = candidate
-    .replace(/,\s*([}\]])/g, '$1')
-    .replace(/[\u0000-\u001F]/g, ' ');
-  try { return JSON.parse(repaired); } catch (_) {}
-  return null;
-}
-
 exports.handler = async function(event, context) {
   const headers = {
     'Access-Control-Allow-Origin': '*',
@@ -131,6 +113,18 @@ Se conosci il valore specifico più preciso per l'alimento in foto, usalo. In ca
 
 STIMA DELLE PORZIONI${body.imageBase64 ? ' (DALLA FOTO)' : ''}:
 ${body.imageBase64 ? `IMPORTANTE — STIMA DEL PESO:
+
+PRIORITÀ 1 — MONETA DA 1 EURO COME RIFERIMENTO DI SCALA:
+Se nella foto è visibile una MONETA DA 1 EURO accanto al cibo (bordo bicolore dorato/argento, diametro esatto 23.25mm), è il riferimento più preciso possibile — usala con priorità su qualsiasi altro metodo.
+- PROCEDURA OBBLIGATORIA:
+  1. Misura visivamente il diametro della moneta nell'immagine come unità di riferimento (23.25mm = 1 "unità moneta")
+  2. Confronta le dimensioni del cibo (lunghezza, larghezza, altezza se stimabile) in "unità moneta"
+  3. Converti in cm reali: dimensione_cm = (dimensione_in_unità_moneta) × 2.325
+  4. Calcola volume e converti in peso usando la densità tipica dell'alimento
+  5. Questo metodo è più affidabile della stima a mano/piatto: se la moneta è visibile, imposta "metodo_stima": "moneta_riferimento" nella risposta (fiducia alta sul peso)
+- Usa questo metodo soprattutto per pasti fuori casa (ristorante, bar) dove non è disponibile una bilancia.
+
+PRIORITÀ 2 — MANO COME RIFERIMENTO (se non c'è moneta):
 Se nella foto è visibile una MANO accanto al cibo:
 ${body.handSize ? `- La larghezza del palmo del paziente è ESATTAMENTE ${body.handSize} cm (misurata con righello).` : '- Larghezza palmo stimata: ~8-9 cm.'}
 - PROCEDURA OBBLIGATORIA: 
@@ -139,24 +133,27 @@ ${body.handSize ? `- La larghezza del palmo del paziente è ESATTAMENTE ${body.h
   3. Stima il volume e converti in grammi usando la densità tipica dell'alimento
   4. ESEMPIO: se un panino è largo quanto 1.5 palmi = ${Math.round((body.handSize || 8.5) * 1.5)} cm, e alto circa mezzo palmo = ${Math.round((body.handSize || 8.5) * 0.5)} cm → volume ~300 cm³ → pane ha densità ~0.3 g/cm³ → peso ~90g
   5. ATTENZIONE: tendi a SOVRASTIMARE il peso. Se sei incerto, scegli il valore PIÙ BASSO della tua stima.
+  6. Imposta "metodo_stima": "mano_riferimento"
 
-Se NON c'è una mano nella foto, usa questi riferimenti:
+PRIORITÀ 3 — NESSUN RIFERIMENTO DI SCALA:
+Se NON c'è né moneta né mano nella foto, usa questi riferimenti:
 - Piatto piano standard: diametro 26-28 cm
 - Piatto fondo standard: diametro 20-22 cm  
 - Posate standard: forchetta ~20 cm, cucchiaio ~18 cm
 - Bicchiere standard: 200-250 ml
 - Fetta di pane: 25-30g
 - Porzione tipica di pasta cotta nel piatto: 180-250g (= 70-100g di pasta cruda)
-Se non ci sono riferimenti di scala, usa porzioni standard italiane.` : 'Il paziente ha descritto il pasto a parole. Chiedi conferma del peso se ambiguo. Se indica solo il nome dell\'alimento senza peso, usa le porzioni standard italiane più comuni.'}
+Se non ci sono riferimenti di scala, usa porzioni standard italiane. Imposta "metodo_stima": "stima_visiva" (fiducia bassa sul peso).` : 'Il paziente ha descritto il pasto a parole. Chiedi conferma del peso se ambiguo. Se indica solo il nome dell\'alimento senza peso, usa le porzioni standard italiane più comuni.'}
 
 FORMATO RISPOSTA — rispondi SOLO con JSON valido senza markdown:
-{"alimenti":[{"nome":"Spaghetti cotti","nome_marca":null,"quantita_g":220,"carbo_per_100g":30.3,"carbo_g":66.7,"stato_cottura":"cotto","proteine_per_100g":5.3,"grassi_per_100g":0.4,"fibre_per_100g":1.2,"kcal_per_100g":137,"categoria":"salato","indice_glicemico":"lento"}],"totale_carbo_g":66.7,"totale_proteine_g":11.7,"totale_grassi_g":0.9,"totale_fibre_g":2.6,"totale_kcal":301,"note":"Valori riferiti alla pasta cotta. Peso crudo stimato: ~88g."}
+{"alimenti":[{"nome":"Spaghetti cotti","nome_marca":null,"quantita_g":220,"carbo_per_100g":30.3,"carbo_g":66.7,"stato_cottura":"cotto","proteine_per_100g":5.3,"grassi_per_100g":0.4,"fibre_per_100g":1.2,"kcal_per_100g":137,"categoria":"salato","indice_glicemico":"lento","metodo_stima":"moneta_riferimento"}],"totale_carbo_g":66.7,"totale_proteine_g":11.7,"totale_grassi_g":0.9,"totale_fibre_g":2.6,"totale_kcal":301,"note":"Valori riferiti alla pasta cotta. Peso crudo stimato: ~88g."}
 
 CAMPI PER OGNI ALIMENTO:
 - nome: nome preciso con stato (cotto/crudo) quando rilevante
 - nome_marca: compila questo campo SOLO SE nella foto è FISICAMENTE VISIBILE una confezione, un logo, o un'etichetta con il nome commerciale leggibile. Scrivi il nome commerciale esatto (es. "Voiello", "Barilla", "Bowl Pros"). REGOLA CRITICA: se vedi solo il CIBO (es. cereali in una ciotola, pasta in un piatto, senza confezione visibile), metti SEMPRE null — anche se pensi di riconoscere il tipo di prodotto. NON dedurre la marca dall'aspetto del cibo: solo dalla confezione/logo effettivamente visibile nella foto. Nel dubbio, metti null. Questo campo determina se il dato è persistibile per il futuro.
+- metodo_stima: "moneta_riferimento" | "mano_riferimento" | "stima_visiva" — indica quale metodo hai usato per stimare il peso, in base a cosa era visibile nella foto
 - quantita_g: peso stimato in grammi
-- stima_peso_note: breve spiegazione di come hai stimato il peso (es. "circa 1.2 palmi di lunghezza = 10cm, altezza 4cm, densità pane ~0.3 → ~50g" oppure "porzione standard italiana")
+- stima_peso_note: breve spiegazione di come hai stimato il peso (es. "moneta 1€ visibile: alimento largo 3.2 unità moneta = 7.4cm..." oppure "circa 1.2 palmi di lunghezza = 10cm, altezza 4cm, densità pane ~0.3 → ~50g" oppure "porzione standard italiana")
 - carbo_per_100g: valore da tabelle nutrizionali (NON stimato)
 - carbo_g: carbo totali della porzione = (quantita_g × carbo_per_100g) / 100
 - stato_cottura: "cotto" | "crudo" | null (per alimenti dove non si applica)
@@ -389,7 +386,7 @@ Rispondi SOLO con JSON valido senza markdown, formato:
 
     const payloadObj = {
       model,
-      max_tokens: body.analysisType === 'pattern-analysis' ? 2000 : ((isFoodAnalysis || isLabelReading) ? 4000 : (body.analysisType === 'medico-chat' ? 1200 : 1000)),
+      max_tokens: body.analysisType === 'pattern-analysis' ? 2000 : ((isFoodAnalysis || isLabelReading) ? 1500 : (body.analysisType === 'medico-chat' ? 1200 : 1000)),
       messages
     };
 
@@ -433,10 +430,37 @@ Rispondi SOLO con JSON valido senza markdown, formato:
     const text = textBlocks.join('\n');
     if (!text) return { statusCode: 500, headers, body: JSON.stringify({ error: 'Risposta vuota da Claude' }) };
 
-    // Estrai JSON dalla risposta — robusto a markdown, testo attorno, char di controllo
-    const jsonResult = extractJson(text);
-    if (!jsonResult) {
-      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Claude non ha restituito JSON valido', raw: text.slice(0, 400) }) };
+    // Estrai JSON dalla risposta — potrebbe essere avvolto in testo o markdown
+    let clean = text.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
+    
+    // Se il testo contiene JSON mescolato a testo, prova ad estrarlo
+    let jsonResult;
+    try {
+      jsonResult = JSON.parse(clean);
+    } catch(e) {
+      // Cerca il primo { e l'ultimo } per estrarre il JSON
+      const firstBrace = clean.indexOf('{');
+      const lastBrace = clean.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        const jsonCandidate = clean.substring(firstBrace, lastBrace + 1);
+        try {
+          jsonResult = JSON.parse(jsonCandidate);
+        } catch(e2) {
+          // Riparazione: rimuove virgole finali e caratteri di controllo letterali
+          // (newline/tab) che dentro una stringa JSON sono sempre invalidi —
+          // rimuoverli non corrompe JSON valido.
+          const repaired = jsonCandidate
+            .replace(/,\s*([}\]])/g, '$1')
+            .replace(/[\u0000-\u001F]/g, ' ');
+          try {
+            jsonResult = JSON.parse(repaired);
+          } catch(e3) {
+            return { statusCode: 500, headers, body: JSON.stringify({ error: 'Claude non ha restituito JSON valido', raw: clean.slice(0, 300) }) };
+          }
+        }
+      } else {
+        return { statusCode: 500, headers, body: JSON.stringify({ error: 'Claude non ha restituito JSON valido', raw: clean.slice(0, 300) }) };
+      }
     }
 
     // ── Validazione post-processing per lettura etichetta ──────────────────
@@ -476,6 +500,17 @@ Rispondi SOLO con JSON valido senza markdown, formato:
         if (!al.fonte) {
           al.fonte = 'stima_ai';
           al.badge = '⚡ Stima AI — verifica i valori';
+        }
+        // Badge di fiducia sul PESO stimato, in base al metodo usato
+        if (al.metodo_stima === 'moneta_riferimento') {
+          al.peso_badge = '🪙 Peso stimato con moneta 1€';
+          al.peso_confidenza = 'alta';
+        } else if (al.metodo_stima === 'mano_riferimento') {
+          al.peso_badge = '✋ Peso stimato con mano';
+          al.peso_confidenza = 'media';
+        } else {
+          al.peso_badge = '👁️ Peso stimato a vista — verifica';
+          al.peso_confidenza = 'bassa';
         }
         return al;
       });
