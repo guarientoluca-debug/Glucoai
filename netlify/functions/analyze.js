@@ -114,6 +114,14 @@ VALORI DI RIFERIMENTO carbo_per_100g (USA QUESTI, NON INVENTARE):
 - Gelato: 24-33g (varia molto per tipo)
 Se conosci il valore specifico più preciso per l'alimento in foto, usalo. In caso di dubbio, preferisci la fonte CREA/INRAN.
 
+TABELLA DENSITÀ REALE PER CONVERSIONE VOLUME→PESO (fonte: FAO/INFOODS Density Database v2.0 — valori misurati, USA QUESTI invece di stimare una densità a occhio quando l'alimento corrisponde a una voce):
+- Pane a panino/rosetta/michetta/filoncino soffice: 0.18 g/cm³
+- Pane bianco a fette confezionato: 0.29 g/cm³
+- Pane bianco non affettato (pagnotta compatta): 0.42 g/cm³
+- Pasta corta cruda: 0.39 g/cm³ | Pasta corta cotta: 0.55 g/cm³
+- Riso cotto: 0.73 g/cm³
+Questa tabella è in costruzione e verrà ampliata nel tempo. Per alimenti NON presenti qui, stima la densità tipica come faresti normalmente in base alla struttura dell'alimento (compatto/poroso/pieno d'aria/a cumulo sciolto).
+
 STIMA DELLE PORZIONI${(body.imageBase64 || isDualPhoto) ? ' (DALLA FOTO)' : ''}:
 ${isDualPhoto ? `IMPORTANTE — STIMA DEL PESO CON 2 FOTO (MISURA PRECISA):
 Hai ricevuto 2 immagini dello STESSO alimento, con la stessa MONETA DA 1 EURO (diametro reale 23.25mm) come riferimento di scala:
@@ -123,8 +131,8 @@ Hai ricevuto 2 immagini dello STESSO alimento, con la stessa MONETA DA 1 EURO (d
   1. Nell'immagine 1: misura quante "unità moneta" (23.25mm ciascuna) occupano lunghezza e larghezza dell'alimento
   2. Nell'immagine 2: misura quante "unità moneta" occupa l'altezza dell'alimento
   3. Converti ciascuna dimensione in cm reali: dimensione_cm = (unità moneta) × 2.325
-  4. Calcola il volume con la formula del SEMI-ellissoide (l'alimento poggia su un piano): V = (2π/3) × (lunghezza/2) × (larghezza/2) × altezza. Converti in peso con la densità tipica dell'alimento.
-  5. CALIBRAZIONE PANE (verificata con bilancia su test reali): per prodotti da forno a forma di panino/rosetta/michetta/filoncino/baguette, applica un fattore correttivo × 0.7 al peso calcolato, PRIMA di qualunque arrotondamento finale. Non applicare questo fattore ad altri alimenti finché non calibrato.
+  4. Calcola il volume con la formula del SEMI-ellissoide (l'alimento poggia su un piano): V = (2π/3) × (lunghezza/2) × (larghezza/2) × altezza
+  5. Converti il volume in peso: se l'alimento corrisponde a una voce della TABELLA DENSITÀ REALE sopra, usa quel valore ESATTO. Altrimenti stima la densità tipica dell'alimento come faresti normalmente.
   6. Misurare lunghezza/larghezza e altezza da 2 immagini separate (invece che indovinarle tutte da una singola foto in prospettiva) riduce l'errore di stima — imposta "metodo_stima": "moneta_doppia_foto" nella risposta (fiducia massima sul peso)
 ` : body.imageBase64 ? `IMPORTANTE — STIMA DEL PESO:
 
@@ -134,8 +142,8 @@ Se nella foto è visibile una MONETA DA 1 EURO accanto al cibo (bordo bicolore d
   1. Misura visivamente il diametro della moneta nell'immagine come unità di riferimento (23.25mm = 1 "unità moneta")
   2. Confronta le dimensioni del cibo (lunghezza, larghezza, altezza dal piano d'appoggio alla sommità) in "unità moneta"
   3. Converti in cm reali: dimensione_cm = (dimensione_in_unità_moneta) × 2.325
-  4. Calcola il volume usando la formula del SEMI-ellissoide, perché l'alimento poggia su un piano (non è sospeso a mezz'aria): V = (2π/3) × (lunghezza/2) × (larghezza/2) × altezza_reale, dove altezza_reale è l'altezza misurata dal piano alla sommità (NON dimezzarla). Converti in peso usando la densità tipica dell'alimento.
-  5. CALIBRAZIONE PANE (verificata con bilancia su test reali): per prodotti da forno a forma di panino/rosetta/michetta/filoncino/baguette, anche con la formula corretta la stima tende a restare più alta del peso reale di circa il 30%. Applica quindi un fattore correttivo × 0.7 al peso calcolato per questi alimenti, PRIMA di qualunque arrotondamento finale. Non applicare questo fattore ad altri alimenti (frutta, formaggi, carne, ecc.) finché non calibrato.
+  4. Calcola il volume usando la formula del SEMI-ellissoide, perché l'alimento poggia su un piano (non è sospeso a mezz'aria): V = (2π/3) × (lunghezza/2) × (larghezza/2) × altezza_reale, dove altezza_reale è l'altezza misurata dal piano alla sommità (NON dimezzarla)
+  5. Converti il volume in peso: se l'alimento corrisponde a una voce della TABELLA DENSITÀ REALE sopra, usa quel valore ESATTO. Altrimenti stima la densità tipica dell'alimento come faresti normalmente.
   6. Questo metodo è più affidabile della stima a mano/piatto: se la moneta è visibile, imposta "metodo_stima": "moneta_riferimento" nella risposta (fiducia alta sul peso)
 - Usa questo metodo soprattutto per pasti fuori casa (ristorante, bar) dove non è disponibile una bilancia. Se è disponibile la modalità "2 foto" (dall'alto + di lato), suggeriscila nelle note per una stima più precisa.
 
@@ -145,8 +153,8 @@ ${body.handSize ? `- La larghezza del palmo del paziente è ESATTAMENTE ${body.h
 - PROCEDURA OBBLIGATORIA: 
   1. Misura visivamente quante volte il palmo (${body.handSize || '8.5'} cm) entra nella lunghezza/larghezza dell'alimento
   2. Calcola le dimensioni reali dell'alimento in cm
-  3. Stima il volume e converti in grammi usando la densità tipica dell'alimento
-  4. ESEMPIO: se un panino è largo quanto 1.5 palmi = ${Math.round((body.handSize || 8.5) * 1.5)} cm, e alto circa mezzo palmo = ${Math.round((body.handSize || 8.5) * 0.5)} cm → volume ~300 cm³ → pane ha densità ~0.3 g/cm³ → peso ~90g
+  3. Stima il volume e converti in grammi usando la TABELLA DENSITÀ REALE sopra se l'alimento corrisponde, altrimenti la densità tipica
+  4. ESEMPIO: se un panino è largo quanto 1.5 palmi = ${Math.round((body.handSize || 8.5) * 1.5)} cm, e alto circa mezzo palmo = ${Math.round((body.handSize || 8.5) * 0.5)} cm → volume ~300 cm³ → panino soffice ha densità 0.18 g/cm³ (da tabella) → peso ~54g
   5. ATTENZIONE: tendi a SOVRASTIMARE il peso. Se sei incerto, scegli il valore PIÙ BASSO della tua stima.
   6. Imposta "metodo_stima": "mano_riferimento"
 
