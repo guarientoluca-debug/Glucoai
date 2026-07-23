@@ -514,6 +514,14 @@ Rispondi SOLO con JSON valido senza markdown, formato:
         }
         return al;
       });
+      console.log('[DEBUG PESO]', JSON.stringify(jsonResult.alimenti.map(a => ({
+        nome: a.nome,
+        metodo_stima: a.metodo_stima,
+        peso_badge: a.peso_badge,
+        peso_confidenza: a.peso_confidenza,
+        quantita_g: a.quantita_g,
+        stima_peso_note: a.stima_peso_note
+      }))));
     }
 
     return { statusCode: 200, headers, body: JSON.stringify(jsonResult) };
