@@ -118,10 +118,11 @@ PRIORITÀ 1 — MONETA DA 1 EURO COME RIFERIMENTO DI SCALA:
 Se nella foto è visibile una MONETA DA 1 EURO accanto al cibo (bordo bicolore dorato/argento, diametro esatto 23.25mm), è il riferimento più preciso possibile — usala con priorità su qualsiasi altro metodo.
 - PROCEDURA OBBLIGATORIA:
   1. Misura visivamente il diametro della moneta nell'immagine come unità di riferimento (23.25mm = 1 "unità moneta")
-  2. Confronta le dimensioni del cibo (lunghezza, larghezza, altezza se stimabile) in "unità moneta"
+  2. Confronta le dimensioni del cibo (lunghezza, larghezza, altezza dal piano d'appoggio alla sommità) in "unità moneta"
   3. Converti in cm reali: dimensione_cm = (dimensione_in_unità_moneta) × 2.325
-  4. Calcola volume e converti in peso usando la densità tipica dell'alimento
-  5. Questo metodo è più affidabile della stima a mano/piatto: se la moneta è visibile, imposta "metodo_stima": "moneta_riferimento" nella risposta (fiducia alta sul peso)
+  4. Calcola il volume usando la formula del SEMI-ellissoide, perché l'alimento poggia su un piano (non è sospeso a mezz'aria): V = (2π/3) × (lunghezza/2) × (larghezza/2) × altezza_reale, dove altezza_reale è l'altezza misurata dal piano alla sommità (NON dimezzarla). Converti in peso usando la densità tipica dell'alimento.
+  5. CALIBRAZIONE PANE (verificata con bilancia su test reali): per prodotti da forno a forma di panino/rosetta/michetta/filoncino/baguette, anche con la formula corretta la stima tende a restare più alta del peso reale di circa il 30%. Applica quindi un fattore correttivo × 0.7 al peso calcolato per questi alimenti, PRIMA di qualunque arrotondamento finale. Non applicare questo fattore ad altri alimenti (frutta, formaggi, carne, ecc.) finché non calibrato.
+  6. Questo metodo è più affidabile della stima a mano/piatto: se la moneta è visibile, imposta "metodo_stima": "moneta_riferimento" nella risposta (fiducia alta sul peso)
 - Usa questo metodo soprattutto per pasti fuori casa (ristorante, bar) dove non è disponibile una bilancia.
 
 PRIORITÀ 2 — MANO COME RIFERIMENTO (se non c'è moneta):
@@ -153,7 +154,7 @@ CAMPI PER OGNI ALIMENTO:
 - nome_marca: compila questo campo SOLO SE nella foto è FISICAMENTE VISIBILE una confezione, un logo, o un'etichetta con il nome commerciale leggibile. Scrivi il nome commerciale esatto (es. "Voiello", "Barilla", "Bowl Pros"). REGOLA CRITICA: se vedi solo il CIBO (es. cereali in una ciotola, pasta in un piatto, senza confezione visibile), metti SEMPRE null — anche se pensi di riconoscere il tipo di prodotto. NON dedurre la marca dall'aspetto del cibo: solo dalla confezione/logo effettivamente visibile nella foto. Nel dubbio, metti null. Questo campo determina se il dato è persistibile per il futuro.
 - metodo_stima: "moneta_riferimento" | "mano_riferimento" | "stima_visiva" — indica quale metodo hai usato per stimare il peso, in base a cosa era visibile nella foto
 - quantita_g: peso stimato in grammi
-- stima_peso_note: breve spiegazione di come hai stimato il peso (es. "moneta 1€ visibile: alimento largo 3.2 unità moneta = 7.4cm..." oppure "circa 1.2 palmi di lunghezza = 10cm, altezza 4cm, densità pane ~0.3 → ~50g" oppure "porzione standard italiana")
+- stima_peso_note: breve spiegazione di come hai stimato il peso, includendo eventuale fattore di calibrazione applicato (es. "moneta 1€ visibile: alimento 10.5×8.1×4.5cm, semi-ellissoide → 88g, calibrazione pane ×0.7 → ~62g" oppure "circa 1.2 palmi di lunghezza = 10cm, altezza 4cm, densità pane ~0.3 → ~50g" oppure "porzione standard italiana")
 - carbo_per_100g: valore da tabelle nutrizionali (NON stimato)
 - carbo_g: carbo totali della porzione = (quantita_g × carbo_per_100g) / 100
 - stato_cottura: "cotto" | "crudo" | null (per alimenti dove non si applica)
