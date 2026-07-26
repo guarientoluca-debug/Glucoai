@@ -162,6 +162,46 @@ exports.handler = async (event) => {
     // Estrai parole chiave
     const keywords = extractKeywords(searchTerm).split(' ').filter(w => w.length > 2);
 
+    // Cerca un fattore di conversione cotto/crudo specifico (CREA Tabella C).
+    // Matching deterministico: alias più specifico vince sempre sul generico.
+    // Condivisa tra match esatto e match fuzzy, per non perdere il fattore
+    // quando un alimento è già salvato nel DB con nome esatto (es. da barcode).
+    async function trovaFattoreCottura(nomeAlimento) {
+      try {
+        const { data: fattoriMatches } = await supabase
+          .from('fattori_cottura')
+          .select('alimento, categoria, yield_factor, alias')
+          .limit(100);
+        if (!fattoriMatches?.length) return { yieldFactor: null, yieldFactorFonte: null };
+        const nomeNorm = nomeAlimento.toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+        const paroleNome = nomeNorm.split(' ');
+        let miglioreMatch = null;
+        let miglioreSpecificita = 0;
+        for (const f of fattoriMatches) {
+          // Un alias matcha se TUTTE le sue parole compaiono nel nome, in qualsiasi ordine/posizione
+          // (es. "penne integrali" matcha "Penne Rigate Integrali" anche con "rigate" in mezzo).
+          const aliasTrovato = (f.alias || []).find(al => {
+            const paroleAlias = al.toLowerCase().split(' ');
+            return paroleAlias.every(pa => paroleNome.includes(pa));
+          });
+          const canonicoHit = nomeNorm.includes(f.alimento.toLowerCase());
+          // Specificità = numero di parole del termine matchato: un match con più parole
+          // (es. "pasta integrale" batte il generico "penne") vince sempre.
+          const termine = aliasTrovato || (canonicoHit ? f.alimento : null);
+          const specificita = termine ? termine.split(' ').length : 0;
+          if (termine && specificita > miglioreSpecificita) {
+            miglioreSpecificita = specificita;
+            miglioreMatch = f;
+          }
+        }
+        return miglioreMatch
+          ? { yieldFactor: miglioreMatch.yield_factor, yieldFactorFonte: miglioreMatch.alimento }
+          : { yieldFactor: null, yieldFactorFonte: null };
+      } catch (e) {
+        return { yieldFactor: null, yieldFactorFonte: null };
+      }
+    }
+
     // Ricerca esatta
     const { data: exactMatch } = await supabase
       .from('alimenti')
@@ -175,6 +215,8 @@ exports.handler = async (event) => {
         .update({ ultimo_uso: new Date().toISOString() })
         .eq('id', exactMatch[0].id);
 
+      const { yieldFactor, yieldFactorFonte } = await trovaFattoreCottura(exactMatch[0].nome);
+
       return {
         statusCode: 200,
         headers,
@@ -184,6 +226,8 @@ exports.handler = async (event) => {
           verified: exactMatch[0].verificato || false,
           fonte_dettaglio: exactMatch[0].fonte_dettaglio,
           alimento: exactMatch[0],
+          yield_factor: yieldFactor,
+          yield_factor_fonte: yieldFactorFonte,
           alternatives: [],
         }),
       };
@@ -286,40 +330,7 @@ exports.handler = async (event) => {
         .update({ ultimo_uso: new Date().toISOString() })
         .eq('id', best.id);
 
-      // Cerca un fattore di conversione cotto/crudo specifico (CREA Tabella C).
-      // Matching deterministico: prima per ALIAS (nomi comuni censiti a mano per ogni voce),
-      // poi per nome canonico. Niente fuzzy scoring: o il termine è censito, o niente fattore.
-      let yieldFactor = null;
-      let yieldFactorFonte = null;
-      try {
-        const { data: fattoriMatches } = await supabase
-          .from('fattori_cottura')
-          .select('alimento, categoria, yield_factor, alias')
-          .limit(100);
-        if (fattoriMatches?.length > 0) {
-          // Normalizza il nome AI: minuscolo, senza contenuto tra parentesi
-          const nomeNorm = best.nome.toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
-          let miglioreMatch = null;
-          let miglioreSpecificita = 0;
-          for (const f of fattoriMatches) {
-            // 1) Match su alias (es. "spaghetti" dentro "spaghetti al pomodoro")
-            const aliasTrovato = (f.alias || []).find(al => nomeNorm.includes(al.toLowerCase()));
-            // 2) Match sul nome canonico completo (es. "orzo perlato")
-            const canonicoHit = nomeNorm.includes(f.alimento.toLowerCase());
-            // Specificità = lunghezza del termine matchato: un match più lungo/preciso
-            // (es. "pasta integrale" batte il generico "penne") vince sempre.
-            const termine = aliasTrovato || (canonicoHit ? f.alimento : null);
-            if (termine && termine.length > miglioreSpecificita) {
-              miglioreSpecificita = termine.length;
-              miglioreMatch = f;
-            }
-          }
-          if (miglioreMatch) {
-            yieldFactor = miglioreMatch.yield_factor;
-            yieldFactorFonte = miglioreMatch.alimento;
-          }
-        }
-      } catch (e) { /* tabella fattori_cottura non disponibile: nessun fattore, il client segnalerà dato mancante */ }
+      const { yieldFactor, yieldFactorFonte } = await trovaFattoreCottura(best.nome);
 
       return {
         statusCode: 200,
