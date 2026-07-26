@@ -299,16 +299,24 @@ exports.handler = async (event) => {
         if (fattoriMatches?.length > 0) {
           // Normalizza il nome AI: minuscolo, senza contenuto tra parentesi
           const nomeNorm = best.nome.toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+          let miglioreMatch = null;
+          let miglioreSpecificita = 0;
           for (const f of fattoriMatches) {
             // 1) Match su alias (es. "spaghetti" dentro "spaghetti al pomodoro")
-            const aliasHit = (f.alias || []).some(al => nomeNorm.includes(al.toLowerCase()));
+            const aliasTrovato = (f.alias || []).find(al => nomeNorm.includes(al.toLowerCase()));
             // 2) Match sul nome canonico completo (es. "orzo perlato")
             const canonicoHit = nomeNorm.includes(f.alimento.toLowerCase());
-            if (aliasHit || canonicoHit) {
-              yieldFactor = f.yield_factor;
-              yieldFactorFonte = f.alimento;
-              break;
+            // Specificità = lunghezza del termine matchato: un match più lungo/preciso
+            // (es. "pasta integrale" batte il generico "penne") vince sempre.
+            const termine = aliasTrovato || (canonicoHit ? f.alimento : null);
+            if (termine && termine.length > miglioreSpecificita) {
+              miglioreSpecificita = termine.length;
+              miglioreMatch = f;
             }
+          }
+          if (miglioreMatch) {
+            yieldFactor = miglioreMatch.yield_factor;
+            yieldFactorFonte = miglioreMatch.alimento;
           }
         }
       } catch (e) { /* tabella fattori_cottura non disponibile: nessun fattore, il client segnalerà dato mancante */ }
