@@ -275,12 +275,43 @@ exports.handler = async (event) => {
       const best = sortedMatches[0];
       
       // Se il match è generico (senza nome prodotto reale), non restituirlo come verificato
-      // anche se nel DB è marcato come tale (potrebbe essere un prodotto diverso)
-      const isReallyVerified = best.nome_tipo === 'confezionato' ? (best.verificato || false) : false;
+      // anche se nel DB è marcato come tale (potrebbe essere un prodotto diverso).
+      // Le voci CREA fanno eccezione: sono dati ufficiali di composizione alimentare,
+      // autorevoli per definizione a prescindere da nome_tipo (che qui indica solo
+      // "generico vs prodotto specifico", non "affidabile vs stima").
+      const isCreaSource = best.fonte === 'crea';
+      const isReallyVerified = isCreaSource ? true : (best.nome_tipo === 'confezionato' ? (best.verificato || false) : false);
 
       await supabase.from('alimenti')
         .update({ ultimo_uso: new Date().toISOString() })
         .eq('id', best.id);
+
+      // Cerca un fattore di conversione cotto/crudo specifico (CREA Tabella C).
+      // Matching deterministico: prima per ALIAS (nomi comuni censiti a mano per ogni voce),
+      // poi per nome canonico. Niente fuzzy scoring: o il termine è censito, o niente fattore.
+      let yieldFactor = null;
+      let yieldFactorFonte = null;
+      try {
+        const { data: fattoriMatches } = await supabase
+          .from('fattori_cottura')
+          .select('alimento, categoria, yield_factor, alias')
+          .limit(100);
+        if (fattoriMatches?.length > 0) {
+          // Normalizza il nome AI: minuscolo, senza contenuto tra parentesi
+          const nomeNorm = best.nome.toLowerCase().replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+          for (const f of fattoriMatches) {
+            // 1) Match su alias (es. "spaghetti" dentro "spaghetti al pomodoro")
+            const aliasHit = (f.alias || []).some(al => nomeNorm.includes(al.toLowerCase()));
+            // 2) Match sul nome canonico completo (es. "orzo perlato")
+            const canonicoHit = nomeNorm.includes(f.alimento.toLowerCase());
+            if (aliasHit || canonicoHit) {
+              yieldFactor = f.yield_factor;
+              yieldFactorFonte = f.alimento;
+              break;
+            }
+          }
+        }
+      } catch (e) { /* tabella fattori_cottura non disponibile: nessun fattore, il client segnalerà dato mancante */ }
 
       return {
         statusCode: 200,
@@ -292,6 +323,8 @@ exports.handler = async (event) => {
           fonte_dettaglio: isReallyVerified ? best.fonte_dettaglio : (best.fonte === 'crea' ? best.fonte_dettaglio : 'Stima AI — verifica i valori'),
           nome_tipo: best.nome_tipo || 'generico',
           alimento: best,
+          yield_factor: yieldFactor,
+          yield_factor_fonte: yieldFactorFonte,
           alternatives: sortedMatches.slice(1).map(a => ({
             id: a.id,
             nome: a.nome,
