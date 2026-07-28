@@ -57,15 +57,21 @@ function host() {
   return REGION ? `api-${REGION}.libreview.io` : 'api.libreview.io';
 }
 
+// FIX: l'API LibreView ora si aspetta la password codificata in base64
+// (errore precedente: "decode base64 password: illegal base64 data at input byte 0").
+// Codifichiamo qui, in un unico punto, così se in futuro tornasse ad accettare
+// testo in chiaro basta togliere questa riga.
+const PASSWORD_B64 = Buffer.from(PASSWORD, 'utf8').toString('base64');
+
 async function login() {
   console.log('🔐 Login su', host());
-  let res = await request(host(), '/llu/auth/login', 'POST', {}, { email: EMAIL, password: PASSWORD });
+  let res = await request(host(), '/llu/auth/login', 'POST', {}, { email: EMAIL, password: PASSWORD_B64 });
   console.log('Status:', res.status);
 
   if (res.data?.data?.redirect && res.data?.data?.region) {
     REGION = res.data.data.region;
     console.log('🌍 Redirect a regione:', REGION);
-    res = await request(host(), '/llu/auth/login', 'POST', {}, { email: EMAIL, password: PASSWORD });
+    res = await request(host(), '/llu/auth/login', 'POST', {}, { email: EMAIL, password: PASSWORD_B64 });
     console.log('Status dopo redirect:', res.status);
   }
 
