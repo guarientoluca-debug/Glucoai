@@ -3,6 +3,56 @@ const https = require('https');
 
 const SUPABASE_URL = 'https://zynytvhmlnvlvswuhtse.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+
+// Stadio 2 del matching: l'AI SCEGLIE il nome più simile da una lista chiusa
+// (non genera/stima nulla — è un compito di classificazione, non di stima numerica).
+// Usato solo quando il matching per parole chiave/sinonimi non ha trovato nulla.
+function chiediMatchAdClaude(nomeAlimento, listaCandidati) {
+  return new Promise((resolve) => {
+    if (!ANTHROPIC_API_KEY || !listaCandidati.length) return resolve(null);
+    const prompt = `Alimento fotografato: "${nomeAlimento}"
+
+Lista di nomi ufficiali CREA nella stessa categoria:
+${listaCandidati.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
+Quale nome della lista corrisponde meglio all'alimento fotografato? Sono sinonimi, nomi regionali, o varianti dello stesso alimento anche se scritti in modo diverso.
+Rispondi SOLO con il nome ESATTO copiato dalla lista (carattere per carattere), oppure la parola NESSUNO se nessuno corrisponde davvero. Nessun altro testo.`;
+
+    const payload = JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 100,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const req = https.request({
+      hostname: 'api.anthropic.com',
+      path: '/v1/messages',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          const risposta = (parsed.content?.[0]?.text || '').trim();
+          if (!risposta || risposta.toUpperCase().includes('NESSUNO')) return resolve(null);
+          const match = listaCandidati.find(c => c.toLowerCase() === risposta.toLowerCase());
+          resolve(match || null);
+        } catch (e) { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.setTimeout(10000, () => { req.destroy(); resolve(null); });
+    req.write(payload);
+    req.end();
+  });
+}
 
 // Fetch JSON da URL (per OpenFoodFacts)
 function fetchJSON(url) {
@@ -45,7 +95,7 @@ exports.handler = async (event) => {
     params = event.queryStringParameters || {};
   }
 
-  const { barcode, nome, user_id } = params;
+const { barcode, nome, user_id, categoria } = params;
   const userId = user_id || '431eb6a4-0b96-4485-afd1-6c8fe238c062';
 
   // ============================================
@@ -326,7 +376,42 @@ exports.handler = async (event) => {
       };
     }
 
-    // Nessun match, né tra i confezionati né in CREA
+    // ── STEP 3: matching a 2 stadi — se l'AI ha indicato una categoria, prova
+    // a far scegliere a Claude il nome più simile da una lista ristretta a
+    // QUELLA categoria (compito di classificazione da lista chiusa, non stima).
+    // Copre i sinonimi non previsti nel dizionario manuale (es. regionalismi,
+    // nomi dialettali, traduzioni imprecise) senza dover censire alias a mano.
+    if (categoria) {
+      const { data: candidatiCategoria } = await supabase
+        .from('crea_alimenti').select('nome').eq('categoria', categoria).limit(150);
+
+      if (candidatiCategoria?.length > 0) {
+        const nomiCandidati = candidatiCategoria.map(c => c.nome);
+        const nomeScelto = await chiediMatchAdClaude(nome, nomiCandidati);
+
+        if (nomeScelto) {
+          const { data: rigaCompleta } = await supabase
+            .from('crea_alimenti').select('*').eq('nome', nomeScelto).limit(1);
+
+          if (rigaCompleta?.length > 0) {
+            const best = rigaCompleta[0];
+            const { yieldFactor, yieldFactorFonte } = await trovaFattoreCottura(best.nome);
+            return {
+              statusCode: 200, headers,
+              body: JSON.stringify({
+                found: true, source: 'crea', verified: true,
+                fonte_dettaglio: (best.fonte_dettaglio || 'CREA Tabelle Composizione Alimenti 2019') + ' (match per categoria)',
+                alimento: best, categoria: best.categoria,
+                yield_factor: yieldFactor, yield_factor_fonte: yieldFactorFonte,
+                alternatives: [],
+              }),
+            };
+          }
+        }
+      }
+    }
+
+    // Nessun match, né tra i confezionati né in CREA (nemmeno con il matching per categoria)
     return {
       statusCode: 200, headers,
       body: JSON.stringify({

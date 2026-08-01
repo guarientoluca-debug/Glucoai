@@ -169,7 +169,7 @@ Se NON c'è né moneta né mano nella foto, usa questi riferimenti:
 Se non ci sono riferimenti di scala, usa porzioni standard italiane. Imposta "metodo_stima": "stima_visiva" (fiducia bassa sul peso).` : 'Il paziente ha descritto il pasto a parole. Chiedi conferma del peso se ambiguo. Se indica solo il nome dell\'alimento senza peso, usa le porzioni standard italiane più comuni.'}
 
 FORMATO RISPOSTA — rispondi SOLO con JSON valido senza markdown:
-{"alimenti":[{"nome":"Spaghetti cotti","nome_marca":null,"quantita_g":220,"carbo_per_100g":30.3,"carbo_g":66.7,"stato_cottura":"cotto","proteine_per_100g":5.3,"grassi_per_100g":0.4,"fibre_per_100g":1.2,"kcal_per_100g":137,"categoria":"salato","indice_glicemico":"lento","metodo_stima":"moneta_riferimento"}],"totale_carbo_g":66.7,"totale_proteine_g":11.7,"totale_grassi_g":0.9,"totale_fibre_g":2.6,"totale_kcal":301,"note":"Valori riferiti alla pasta cotta. Peso crudo stimato: ~88g."}
+{"alimenti":[{"nome":"Spaghetti cotti","nome_marca":null,"quantita_g":220,"carbo_per_100g":30.3,"carbo_g":66.7,"stato_cottura":"cotto","proteine_per_100g":5.3,"grassi_per_100g":0.4,"fibre_per_100g":1.2,"kcal_per_100g":137,"categoria":"salato","categoria_crea":"Cereali e derivati","indice_glicemico":"lento","metodo_stima":"moneta_riferimento"}],"totale_carbo_g":66.7,"totale_proteine_g":11.7,"totale_grassi_g":0.9,"totale_fibre_g":2.6,"totale_kcal":301,"note":"Valori riferiti alla pasta cotta. Peso crudo stimato: ~88g."}
 
 CAMPI PER OGNI ALIMENTO:
 - nome: nome preciso con stato (cotto/crudo) quando rilevante
@@ -182,6 +182,9 @@ CAMPI PER OGNI ALIMENTO:
 - stato_cottura: "cotto" | "crudo" | null (per alimenti dove non si applica)
 - proteine_per_100g, grassi_per_100g, fibre_per_100g, kcal_per_100g
 - categoria: "dolce" | "salato"
+- categoria_crea: la categoria merceologica ufficiale CREA a cui appartiene l'alimento, scegli SOLO tra queste 20 (esattamente come scritte, servono per la ricerca nel database):
+  "Cereali e derivati", "Legumi", "Verdure e ortaggi", "Frutta", "Frutta secca a guscio e semi oleaginosi", "Carni fresche", "Carni trasformate e conservate", "Fast-food a base di carne", "Frattaglie", "Prodotti della pesca", "Latte e yogurt", "Formaggi e latticini", "Uova", "Oli e grassi", "Dolci", "Prodotti vari", "Bevande alcoliche", "Alimenti Etnici", "Ricette Italiane", "Alimenti Tradizionali"
+  Usa "Ricette Italiane" per piatti pronti/composti tipici italiani (es. lasagna, parmigiana, risotto) quando fotografi il piatto intero prima di scomporlo in ingredienti. Per un singolo ingrediente scomposto, usa la categoria di QUELL'ingrediente (es. "pomodoro" → Verdure e ortaggi, non Ricette Italiane).
 - indice_glicemico: "lento" (pasta, legumi, riso basmati, verdure, cereali integrali) | "medio" (riso bianco, frutta matura, pane integrale, patate bollite) | "veloce" (focaccia, pizza, pane bianco, dolci, succhi, cornetti, crackers, patate fritte)`;
 
       if (isDualPhoto) {
