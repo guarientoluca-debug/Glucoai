@@ -381,19 +381,13 @@ const { barcode, nome, user_id, categoria } = params;
     // QUELLA categoria (compito di classificazione da lista chiusa, non stima).
     // Copre i sinonimi non previsti nel dizionario manuale (es. regionalismi,
     // nomi dialettali, traduzioni imprecise) senza dover censire alias a mano.
-    console.log('🔍 [DEBUG STADIO2] nome ricevuto:', JSON.stringify(nome), '| categoria ricevuta:', JSON.stringify(categoria));
-
     if (categoria) {
       const { data: candidatiCategoria } = await supabase
         .from('crea_alimenti').select('nome').eq('categoria', categoria).limit(150);
 
-      console.log('🔍 [DEBUG STADIO2] candidati trovati in categoria "' + categoria + '":', candidatiCategoria?.length || 0);
-
       if (candidatiCategoria?.length > 0) {
         const nomiCandidati = candidatiCategoria.map(c => c.nome);
         const nomeScelto = await chiediMatchAdClaude(nome, nomiCandidati);
-
-        console.log('🔍 [DEBUG STADIO2] risposta Claude:', JSON.stringify(nomeScelto));
 
         if (nomeScelto) {
           const { data: rigaCompleta } = await supabase
@@ -415,8 +409,6 @@ const { barcode, nome, user_id, categoria } = params;
           }
         }
       }
-    } else {
-      console.log('🔍 [DEBUG STADIO2] SALTATO — nessuna categoria ricevuta dal client');
     }
 
     // Nessun match, né tra i confezionati né in CREA (nemmeno con il matching per categoria)
