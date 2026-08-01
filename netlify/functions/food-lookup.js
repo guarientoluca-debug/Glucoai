@@ -140,7 +140,8 @@ exports.handler = async (event) => {
   }
 
   // ============================================
-  // MODALITA 2: NOME → DB locale (CREA + storico)
+  // MODALITA 2: NOME → prima "alimenti" (prodotti confezionati verificati),
+  // poi fallback su "crea_alimenti" (898 alimenti generici ufficiali CREA)
   // ============================================
   if (nome) {
     const searchTerm = nome.trim().toLowerCase();
@@ -148,24 +149,16 @@ exports.handler = async (event) => {
     // Funzione per pulire il nome: rimuove parentesi, aggettivi di cottura, e parti superflue
     function extractKeywords(name) {
       let clean = name.toLowerCase();
-      // Rimuovi tutto tra parentesi
       clean = clean.replace(/\([^)]*\)/g, '');
-      // Rimuovi aggettivi/specificazioni comuni dall'AI
       clean = clean.replace(/\b(a julienne|a bastoncini|a fette|a cubetti|a pezzi|a rondelle|grattuggiato|tritato|affettato|tagliato|scottato|scottate|alla griglia|al forno|in padella|alla piastra|saltato|soffritto|fritto|lesso|lessato|condito|condita|surgelato|fresco|freschi|fresche|crudo|cruda|crudi|crude|cotto|cotta|cotti|cotte|bollito|bollita|bolliti|bollite|porzione|misto|mista|misti|miste)\b/g, '');
-      // Rimuovi articoli e preposizioni
       clean = clean.replace(/\b(il|lo|la|le|gli|i|un|una|del|della|dello|dei|delle|degli|di|da|in|con|su|per|tra|fra|al|alla|allo|alle|agli|ai|e|o|ed)\b/g, '');
-      // Rimuovi spazi multipli e trim
       clean = clean.replace(/\s+/g, ' ').trim();
       return clean;
     }
 
-    // Estrai parole chiave
     const keywords = extractKeywords(searchTerm).split(' ').filter(w => w.length > 2);
 
     // Cerca un fattore di conversione cotto/crudo specifico (CREA Tabella C).
-    // Matching deterministico: alias più specifico vince sempre sul generico.
-    // Condivisa tra match esatto e match fuzzy, per non perdere il fattore
-    // quando un alimento è già salvato nel DB con nome esatto (es. da barcode).
     async function trovaFattoreCottura(nomeAlimento) {
       try {
         const { data: fattoriMatches } = await supabase
@@ -178,15 +171,11 @@ exports.handler = async (event) => {
         let miglioreMatch = null;
         let miglioreSpecificita = 0;
         for (const f of fattoriMatches) {
-          // Un alias matcha se TUTTE le sue parole compaiono nel nome, in qualsiasi ordine/posizione
-          // (es. "penne integrali" matcha "Penne Rigate Integrali" anche con "rigate" in mezzo).
           const aliasTrovato = (f.alias || []).find(al => {
             const paroleAlias = al.toLowerCase().split(' ');
             return paroleAlias.every(pa => paroleNome.includes(pa));
           });
           const canonicoHit = nomeNorm.includes(f.alimento.toLowerCase());
-          // Specificità = numero di parole del termine matchato: un match con più parole
-          // (es. "pasta integrale" batte il generico "penne") vince sempre.
           const termine = aliasTrovato || (canonicoHit ? f.alimento : null);
           const specificita = termine ? termine.split(' ').length : 0;
           if (termine && specificita > miglioreSpecificita) {
@@ -202,167 +191,122 @@ exports.handler = async (event) => {
       }
     }
 
-    // Ricerca esatta
-    const { data: exactMatch } = await supabase
-      .from('alimenti')
-      .select('*')
-      .eq('user_id', userId)
-      .ilike('nome', searchTerm)
-      .limit(1);
+    // Trova il miglior match per parole chiave in un array di righe già recuperate
+    // (usato sia per "alimenti" che per "crea_alimenti", stessa logica di scoring).
+    function migliorMatchPerKeyword(righe) {
+      if (!righe.length) return null;
+      const sorted = [...righe].sort((a, b) => {
+        const score = (item) => keywords.filter(kw => item.nome.toLowerCase().includes(kw)).length;
+        return score(b) - score(a);
+      });
+      const best = sorted[0];
+      const scoreBest = keywords.filter(kw => best.nome.toLowerCase().includes(kw)).length;
+      const minKeywords = Math.max(2, Math.ceil(keywords.length * 0.5));
+      if (scoreBest < minKeywords && !best.nome.toLowerCase().includes(searchTerm)) return null;
+      return { best, alternatives: sorted.slice(1, 4) };
+    }
 
-    if (exactMatch?.length > 0) {
-      await supabase.from('alimenti')
-        .update({ ultimo_uso: new Date().toISOString() })
-        .eq('id', exactMatch[0].id);
+    // ── STEP 1: cerca in "alimenti" — prodotti confezionati verificati ──
+    // (dopo la ripulitura, questa tabella contiene SOLO openfoodfacts/etichetta/manuale:
+    // qualsiasi match qui è automaticamente verificato, niente più controlli su nome_tipo)
+    const { data: alimEsatto } = await supabase
+      .from('alimenti').select('*').eq('user_id', userId).ilike('nome', searchTerm).limit(1);
 
-      const { yieldFactor, yieldFactorFonte } = await trovaFattoreCottura(exactMatch[0].nome);
-
+    if (alimEsatto?.length > 0) {
+      await supabase.from('alimenti').update({ ultimo_uso: new Date().toISOString() }).eq('id', alimEsatto[0].id);
+      const { yieldFactor, yieldFactorFonte } = await trovaFattoreCottura(alimEsatto[0].nome);
       return {
-        statusCode: 200,
-        headers,
+        statusCode: 200, headers,
         body: JSON.stringify({
-          found: true,
-          source: exactMatch[0].fonte || 'db_locale',
-          verified: exactMatch[0].verificato || false,
-          fonte_dettaglio: exactMatch[0].fonte_dettaglio,
-          alimento: exactMatch[0],
-          yield_factor: yieldFactor,
-          yield_factor_fonte: yieldFactorFonte,
-          alternatives: [],
+          found: true, source: alimEsatto[0].fonte, verified: true,
+          fonte_dettaglio: alimEsatto[0].fonte_dettaglio, alimento: alimEsatto[0],
+          yield_factor: yieldFactor, yield_factor_fonte: yieldFactorFonte, alternatives: [],
         }),
       };
     }
 
-    // Ricerca fuzzy (contiene il termine intero)
-    const { data: fuzzyMatches } = await supabase
-      .from('alimenti')
-      .select('*')
-      .eq('user_id', userId)
-      .ilike('nome', `%${searchTerm}%`)
-      .order('verificato', { ascending: false })
-      .order('ultimo_uso', { ascending: false, nullsFirst: false })
-      .limit(10);
+    const { data: alimFuzzy } = await supabase
+      .from('alimenti').select('*').eq('user_id', userId).ilike('nome', `%${searchTerm}%`).limit(10);
 
-    // Se fuzzy non trova nulla O non trova CREA, cerca anche per parole chiave
-    let allMatches = fuzzyMatches || [];
-    const hasCreaMatch = allMatches.some(m => m.fonte === 'crea' || m.fonte === 'etichetta' || m.fonte === 'manuale' || m.fonte === 'openfoodfacts');
-
-    if (keywords.length > 0 && !hasCreaMatch) {
-      // Cerca con ogni parola chiave e aggiungi i risultati
+    let alimKeyword = alimFuzzy || [];
+    if (keywords.length > 0) {
       for (const kw of keywords) {
-        const { data: kwMatches } = await supabase
-          .from('alimenti')
-          .select('*')
-          .eq('user_id', userId)
-          .ilike('nome', `%${kw}%`)
-          .eq('verificato', true) // solo verificati (CREA, etichetta, ecc)
-          .order('ultimo_uso', { ascending: false, nullsFirst: false })
-          .limit(10);
-        if (kwMatches?.length > 0) {
-          // Merge: aggiungi senza duplicati
-          const existingIds = new Set(allMatches.map(m => m.id));
-          for (const km of kwMatches) {
-            if (!existingIds.has(km.id)) {
-              allMatches.push(km);
-              existingIds.add(km.id);
-            }
-          }
-          break; // la prima keyword che trova match verificati basta
+        const { data: km } = await supabase.from('alimenti').select('*').eq('user_id', userId).ilike('nome', `%${kw}%`).limit(10);
+        if (km?.length > 0) {
+          const ids = new Set(alimKeyword.map(m => m.id));
+          for (const k of km) if (!ids.has(k.id)) { alimKeyword.push(k); ids.add(k.id); }
         }
       }
     }
 
-    if (allMatches.length > 0) {
-      // Priorità: rilevanza keywords PRIMA, poi fonte
-      const sortedMatches = allMatches.sort((a, b) => {
-        const sourcePriority = (item) => {
-          // Confezionato con nome reale è più affidabile di generico
-          if (item.nome_tipo === 'confezionato') {
-            if (item.fonte === 'etichetta' || item.fonte === 'manuale' || item.fonte === 'openfoodfacts' || item.fonte === 'medico') return 0;
-          }
-          if (item.fonte === 'crea') return 1;
-          if (item.fonte === 'openfoodfacts') return 1;
-          return 2; // ai, generico, o null
-        };
-        // Conta quante keywords matchano nel nome
-        const keywordScore = (item) => {
-          const nome = item.nome.toLowerCase();
-          return keywords.filter(kw => nome.includes(kw)).length;
-        };
-        // Keyword score è più importante della fonte: un match con più parole è più rilevante
-        const kwDiff = keywordScore(b) - keywordScore(a);
-        if (kwDiff !== 0) return kwDiff;
-        // A parità di keywords, fonte migliore vince
-        return sourcePriority(a) - sourcePriority(b);
-      });
-
-      // Filtra: il best match deve avere almeno il 50% delle keywords in comune
-      // per evitare false match tipo "fiocchi" → prodotto diverso con "fiocchi" nel nome
-      const keywordScoreBest = keywords.filter(kw => sortedMatches[0].nome.toLowerCase().includes(kw)).length;
-      const minKeywords = Math.max(2, Math.ceil(keywords.length * 0.5)); // almeno 50% delle keywords, minimo 2
-      
-      if (keywordScoreBest < minKeywords && !sortedMatches[0].nome.toLowerCase().includes(searchTerm)) {
-        // Match troppo debole — non restituire come trovato
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({
-            found: false,
-            source: null,
-            message: 'Nessun match sufficientemente affidabile. Usa la stima AI.',
-            search_term: searchTerm,
-            candidates: sortedMatches.slice(0, 3).map(a => ({ nome: a.nome, carbo_per_100g: a.carbo_per_100g, fonte: a.fonte })),
-          }),
-        };
-      }
-
-      const best = sortedMatches[0];
-      
-      // Se il match è generico (senza nome prodotto reale), non restituirlo come verificato
-      // anche se nel DB è marcato come tale (potrebbe essere un prodotto diverso).
-      // Le voci CREA fanno eccezione: sono dati ufficiali di composizione alimentare,
-      // autorevoli per definizione a prescindere da nome_tipo (che qui indica solo
-      // "generico vs prodotto specifico", non "affidabile vs stima").
-      const isCreaSource = best.fonte === 'crea';
-      const isReallyVerified = isCreaSource ? true : (best.nome_tipo === 'confezionato' ? (best.verificato || false) : false);
-
-      await supabase.from('alimenti')
-        .update({ ultimo_uso: new Date().toISOString() })
-        .eq('id', best.id);
-
+    const matchAlimenti = migliorMatchPerKeyword(alimKeyword);
+    if (matchAlimenti) {
+      const best = matchAlimenti.best;
+      await supabase.from('alimenti').update({ ultimo_uso: new Date().toISOString() }).eq('id', best.id);
       const { yieldFactor, yieldFactorFonte } = await trovaFattoreCottura(best.nome);
-
       return {
-        statusCode: 200,
-        headers,
+        statusCode: 200, headers,
         body: JSON.stringify({
-          found: true,
-          source: best.fonte || 'db_locale',
-          verified: isReallyVerified,
-          fonte_dettaglio: isReallyVerified ? best.fonte_dettaglio : (best.fonte === 'crea' ? best.fonte_dettaglio : 'Stima AI — verifica i valori'),
-          nome_tipo: best.nome_tipo || 'generico',
-          alimento: best,
-          yield_factor: yieldFactor,
-          yield_factor_fonte: yieldFactorFonte,
-          alternatives: sortedMatches.slice(1).map(a => ({
-            id: a.id,
-            nome: a.nome,
-            carbo_per_100g: a.carbo_per_100g,
-            fonte: a.fonte,
-            verificato: a.verificato,
-          })),
+          found: true, source: best.fonte, verified: true,
+          fonte_dettaglio: best.fonte_dettaglio, alimento: best,
+          yield_factor: yieldFactor, yield_factor_fonte: yieldFactorFonte,
+          alternatives: matchAlimenti.alternatives.map(a => ({ id: a.id, nome: a.nome, carbo_per_100g: a.carbo_per_100g, fonte: a.fonte, verificato: true })),
         }),
       };
     }
 
-    // Nessun match nel DB
+    // ── STEP 2: nessun confezionato trovato → cerca in "crea_alimenti" (898 alimenti ufficiali) ──
+    const { data: creaEsatto } = await supabase
+      .from('crea_alimenti').select('*').ilike('nome', searchTerm).limit(1);
+
+    if (creaEsatto?.length > 0) {
+      const { yieldFactor, yieldFactorFonte } = await trovaFattoreCottura(creaEsatto[0].nome);
+      return {
+        statusCode: 200, headers,
+        body: JSON.stringify({
+          found: true, source: 'crea', verified: true,
+          fonte_dettaglio: creaEsatto[0].fonte_dettaglio, alimento: creaEsatto[0],
+          categoria: creaEsatto[0].categoria,
+          yield_factor: yieldFactor, yield_factor_fonte: yieldFactorFonte, alternatives: [],
+        }),
+      };
+    }
+
+    const { data: creaFuzzy } = await supabase
+      .from('crea_alimenti').select('*').ilike('nome', `%${searchTerm}%`).limit(10);
+
+    let creaKeyword = creaFuzzy || [];
+    if (keywords.length > 0) {
+      for (const kw of keywords) {
+        const { data: km } = await supabase.from('crea_alimenti').select('*').ilike('nome', `%${kw}%`).limit(10);
+        if (km?.length > 0) {
+          const ids = new Set(creaKeyword.map(m => m.id));
+          for (const k of km) if (!ids.has(k.id)) { creaKeyword.push(k); ids.add(k.id); }
+        }
+      }
+    }
+
+    const matchCrea = migliorMatchPerKeyword(creaKeyword);
+    if (matchCrea) {
+      const best = matchCrea.best;
+      const { yieldFactor, yieldFactorFonte } = await trovaFattoreCottura(best.nome);
+      return {
+        statusCode: 200, headers,
+        body: JSON.stringify({
+          found: true, source: 'crea', verified: true,
+          fonte_dettaglio: best.fonte_dettaglio, alimento: best, categoria: best.categoria,
+          yield_factor: yieldFactor, yield_factor_fonte: yieldFactorFonte,
+          alternatives: matchCrea.alternatives.map(a => ({ id: a.id, nome: a.nome, carbo_per_100g: a.carbo_per_100g, fonte: 'crea', verificato: true })),
+        }),
+      };
+    }
+
+    // Nessun match, né tra i confezionati né in CREA
     return {
-      statusCode: 200,
-      headers,
+      statusCode: 200, headers,
       body: JSON.stringify({
-        found: false,
-        source: null,
-        message: 'Alimento non trovato nel database. Usa la stima AI.',
+        found: false, source: null,
+        message: 'Alimento non trovato né tra i prodotti verificati né in CREA.',
         search_term: searchTerm,
       }),
     };
