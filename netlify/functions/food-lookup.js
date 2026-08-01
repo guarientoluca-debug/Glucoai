@@ -158,6 +158,31 @@ exports.handler = async (event) => {
 
     const keywords = extractKeywords(searchTerm).split(' ').filter(w => w.length > 2);
 
+    // Sinonimi comuni italiani: il matching per parole chiave non collega termini
+    // senza lettere in comune (es. "cornetto" e "croissant"). Piccolo dizionario
+    // manuale per i casi più frequenti — non sostituisce il matching semantico
+    // vero (AI + categoria), ma sblocca subito i sinonimi più comuni.
+    const SINONIMI = {
+      'cornetto': ['croissant', 'croissants'],
+      'brioche': ['croissant', 'croissants'],
+      'cornetti': ['croissant', 'croissants'],
+      'toast': ['tramezzino', 'sandwich'],
+      'panino': ['pane', 'rosetta'],
+      'crostata': ['torta'],
+      'biscotti': ['frollini'],
+      'insalata': ['lattuga'],
+      'ceci': ['cece'],
+      'passata': ['pomodoro'],
+      'sugo': ['pomodoro'],
+      'formaggio': ['formaggi'],
+      'salume': ['salumi', 'affettato'],
+      'affettato': ['salume', 'salumi'],
+    };
+    const keywordsEspanse = [...keywords];
+    for (const kw of keywords) {
+      if (SINONIMI[kw]) keywordsEspanse.push(...SINONIMI[kw]);
+    }
+
     // Cerca un fattore di conversione cotto/crudo specifico (CREA Tabella C).
     async function trovaFattoreCottura(nomeAlimento) {
       try {
@@ -196,11 +221,11 @@ exports.handler = async (event) => {
     function migliorMatchPerKeyword(righe) {
       if (!righe.length) return null;
       const sorted = [...righe].sort((a, b) => {
-        const score = (item) => keywords.filter(kw => item.nome.toLowerCase().includes(kw)).length;
+        const score = (item) => keywordsEspanse.filter(kw => item.nome.toLowerCase().includes(kw)).length;
         return score(b) - score(a);
       });
       const best = sorted[0];
-      const scoreBest = keywords.filter(kw => best.nome.toLowerCase().includes(kw)).length;
+      const scoreBest = keywordsEspanse.filter(kw => best.nome.toLowerCase().includes(kw)).length;
       const minKeywords = Math.max(2, Math.ceil(keywords.length * 0.5));
       if (scoreBest < minKeywords && !best.nome.toLowerCase().includes(searchTerm)) return null;
       return { best, alternatives: sorted.slice(1, 4) };
@@ -229,8 +254,8 @@ exports.handler = async (event) => {
       .from('alimenti').select('*').eq('user_id', userId).ilike('nome', `%${searchTerm}%`).limit(10);
 
     let alimKeyword = alimFuzzy || [];
-    if (keywords.length > 0) {
-      for (const kw of keywords) {
+    if (keywordsEspanse.length > 0) {
+      for (const kw of keywordsEspanse) {
         const { data: km } = await supabase.from('alimenti').select('*').eq('user_id', userId).ilike('nome', `%${kw}%`).limit(10);
         if (km?.length > 0) {
           const ids = new Set(alimKeyword.map(m => m.id));
@@ -276,8 +301,8 @@ exports.handler = async (event) => {
       .from('crea_alimenti').select('*').ilike('nome', `%${searchTerm}%`).limit(10);
 
     let creaKeyword = creaFuzzy || [];
-    if (keywords.length > 0) {
-      for (const kw of keywords) {
+    if (keywordsEspanse.length > 0) {
+      for (const kw of keywordsEspanse) {
         const { data: km } = await supabase.from('crea_alimenti').select('*').ilike('nome', `%${kw}%`).limit(10);
         if (km?.length > 0) {
           const ids = new Set(creaKeyword.map(m => m.id));
