@@ -28,8 +28,30 @@ exports.handler = async function(event, context) {
     // Modalità "misura precisa": 2 foto (dall'alto + di lato) con moneta, invece di 1 foto in prospettiva
     const isDualPhoto = !!(body.imageBase64Top && body.imageBase64Side);
 
+    // ── Modalità 8: identifica prodotto da foto confezione (Flusso 2 — "Foto prodotto").
+    // SOLO lettura nome/marca, MAI stima nutrizionale — quella arriva solo da DB o da
+    // lettura etichetta esplicita (Modalità 7). Coerente col principio "mai inventare numeri".
+    if (body.analysisType === 'identify-product' && body.imageBase64) {
+      const { imageBase64, mediaType } = body;
+      messages = [{
+        role: 'user',
+        content: [
+          { type: 'image', source: { type: 'base64', media_type: mediaType || 'image/jpeg', data: imageBase64 } },
+          { type: 'text', text: `Guarda questa foto di una confezione di prodotto alimentare. Il tuo UNICO compito è identificare il nome del prodotto e la marca, leggendo la confezione/etichetta/logo visibili.
+
+NON stimare valori nutrizionali in nessun caso — carboidrati, proteine, grassi, kcal NON vanno indovinati qui, verranno recuperati da un database o da una foto separata dell'etichetta nutrizionale.
+
+Cerca il nome commerciale esatto e la marca (es. "Barilla", "Mulino Bianco", "Voiello"). Se la confezione è generica, il testo è illeggibile, sfocato, o non riesci a identificare un nome specifico con sicurezza, dillo chiaramente invece di indovinare.
+
+Rispondi SOLO con JSON valido senza markdown:
+{"nome_prodotto":"nome esatto letto dalla confezione, es. Penne Rigate Barilla, o null se non identificabile","nome_marca":"marca se visibile, o null","prodotto_identificato":true}
+
+Imposta "prodotto_identificato": false (e nome_prodotto: null) se non riesci a leggere un nome chiaro e specifico.` }
+        ]
+      }];
+
     // ── Modalità 7: lettura etichetta nutrizionale (DEVE stare PRIMA del check imageBase64) ──
-    if (body.analysisType === 'read-label' && body.imageBase64) {
+    } else if (body.analysisType === 'read-label' && body.imageBase64) {
       const { imageBase64, mediaType } = body;
       messages = [{
         role: 'user',
@@ -412,13 +434,14 @@ Rispondi SOLO con JSON valido senza markdown, formato:
     }
 
     // ── Chiamata API Anthropic ───────────────────────────────────────────────
-    const isFoodAnalysis = (!!body.imageBase64 || !!body.textDescription || isDualPhoto) && body.analysisType !== 'read-label';
+    const isFoodAnalysis = (!!body.imageBase64 || !!body.textDescription || isDualPhoto) && body.analysisType !== 'read-label' && body.analysisType !== 'identify-product';
     const isLabelReading = body.analysisType === 'read-label';
+    const isProductIdentification = body.analysisType === 'identify-product';
     const isPhotoAnalysis = !!body.imageBase64 || isDualPhoto;
     const isTextOnly = !!body.textDescription && !body.imageBase64 && !isDualPhoto;
 
-    // Foto cibo/etichetta → Sonnet (serve vision). Testo puro → Haiku (più veloce)
-    const model = (isPhotoAnalysis || isLabelReading) ? 'claude-sonnet-4-6' : 
+    // Foto cibo/etichetta/prodotto → Sonnet (serve vision). Testo puro → Haiku (più veloce)
+    const model = (isPhotoAnalysis || isLabelReading || isProductIdentification) ? 'claude-sonnet-4-6' : 
                   isTextOnly ? 'claude-haiku-4-5-20251001' :
                   (body.analysisType === 'pattern-analysis' || body.analysisType === 'medico-chat') ? 'claude-haiku-4-5-20251001' : 'claude-haiku-4-5-20251001';
 

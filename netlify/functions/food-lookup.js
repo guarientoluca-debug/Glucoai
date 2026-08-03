@@ -95,8 +95,48 @@ exports.handler = async (event) => {
     params = event.queryStringParameters || {};
   }
 
-const { barcode, nome, user_id, categoria } = params;
+const { barcode, nome, user_id, categoria, salva_prodotto } = params;
   const userId = user_id || '431eb6a4-0b96-4485-afd1-6c8fe238c062';
+
+  // ============================================
+  // MODALITA 0: SALVA PRODOTTO — Flusso 2, dopo lettura etichetta di un prodotto
+  // non trovato né in "alimenti" né in "crea_alimenti". Scrive permanentemente
+  // in "alimenti" (fonte='etichetta', verificato=true) così le prossime volte
+  // il prodotto viene trovato subito, senza rifotografare l'etichetta.
+  // ============================================
+  if (salva_prodotto) {
+    const p = salva_prodotto;
+    if (!p.nome || p.carbo_per_100g == null) {
+      return {
+        statusCode: 400, headers,
+        body: JSON.stringify({ error: 'salva_prodotto richiede almeno nome e carbo_per_100g' }),
+      };
+    }
+    const { data: salvato, error } = await supabase
+      .from('alimenti')
+      .upsert({
+        user_id: userId,
+        nome: p.nome,
+        carbo_per_100g: p.carbo_per_100g,
+        proteine_per_100g: p.proteine_per_100g ?? null,
+        grassi_per_100g: p.grassi_per_100g ?? null,
+        fibre_per_100g: p.fibre_per_100g ?? null,
+        kcal_per_100g: p.kcal_per_100g ?? null,
+        fonte: 'etichetta',
+        verificato: true,
+        fonte_dettaglio: p.fonte_dettaglio || `Foto etichetta - ${p.nome}`,
+        ultimo_uso: new Date().toISOString(),
+      }, { onConflict: 'user_id,nome' })
+      .select();
+
+    if (error) {
+      return { statusCode: 500, headers, body: JSON.stringify({ error: 'Errore salvataggio: ' + error.message }) };
+    }
+    return {
+      statusCode: 200, headers,
+      body: JSON.stringify({ salvato: true, alimento: salvato?.[0] || null }),
+    };
+  }
 
   // ============================================
   // MODALITA 1: BARCODE → OpenFoodFacts
